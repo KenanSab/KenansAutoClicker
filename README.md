@@ -1,6 +1,6 @@
 # ⚡ Kenan's AutoClicker
 
-A fast, clean **auto-clicker** *and* **auto-key presser** with a global
+KAC or  Kenan's AutoClicker is a fast, clean **auto-clicker** *and* **auto-key presser** with a global
 start/stop hotkey. Pick a key and it spams it until you stop. Works on
 Windows, macOS, and Linux.
 
