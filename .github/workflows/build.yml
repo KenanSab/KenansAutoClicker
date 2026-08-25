@@ -1,0 +1,82 @@
+name: Build Kenan's AutoClicker
+
+# Builds a real Windows .exe (and a macOS binary) in the cloud.
+# - Every push to main: uploads the builds as downloadable "Artifacts"
+#   (Actions tab -> latest run -> Artifacts).
+# - Every tag like v1.0.0: also publishes a GitHub Release with the
+#   files attached, so people can download them from the Releases page.
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:   # lets you trigger a build manually from the Actions tab
+
+permissions:
+  contents: write       # needed to create Releases
+
+jobs:
+  # ----------------------------------------------------------------- #
+  #  WINDOWS  ->  KenansAutoClicker.exe
+  # ----------------------------------------------------------------- #
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pynput pyinstaller
+
+      - name: Build EXE
+        run: pyinstaller --onefile --windowed --name "KenansAutoClicker" KenansAutoClicker.py
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KenansAutoClicker-Windows
+          path: dist/KenansAutoClicker.exe
+
+      - name: Attach EXE to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/KenansAutoClicker.exe
+
+  # ----------------------------------------------------------------- #
+  #  macOS  ->  KenansAutoClicker (app bundle, zipped)
+  # ----------------------------------------------------------------- #
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pynput pyinstaller
+
+      - name: Build app
+        run: pyinstaller --onefile --windowed --name "KenansAutoClicker" KenansAutoClicker.py
+
+      - name: Zip the .app
+        run: |
+          cd dist
+          zip -r KenansAutoClicker-macOS.zip KenansAutoClicker.app
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KenansAutoClicker-macOS
+          path: dist/KenansAutoClicker-macOS.zip
+
+      - name: Attach macOS build to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/KenansAutoClicker-macOS.zip
