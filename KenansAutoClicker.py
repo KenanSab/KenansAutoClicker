@@ -50,26 +50,32 @@ except ImportError:  # pragma: no cover
 APP_NAME = "Kenan's AutoClicker"
 CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".kenans_autoclicker.json")
 
+UI_FONT = "Segoe UI"          # falls back gracefully on macOS / Linux
+
 
 # --------------------------------------------------------------------------- #
-#  Theme palettes
+#  Palettes
 # --------------------------------------------------------------------------- #
 THEMES = {
     "dark": {
-        "bg": "#0f1115", "surface": "#181b22", "surface2": "#20242e", "border": "#2a2f3a",
-        "text": "#e6e9ef", "muted": "#9aa4b2", "accent": "#4f8cff", "accent_fg": "#ffffff",
-        "success": "#37c871", "danger": "#ff5c5c", "field": "#12151b",
+        "bg": "#0b0d13", "surface": "#141821", "surface2": "#1c2130", "raised": "#232a3b",
+        "border": "#262c3b", "text": "#eef1f7", "muted": "#8b95a7", "faint": "#5d6779",
+        "accent": "#6b8afd", "accent_soft": "#1e2740", "accent_fg": "#ffffff",
+        "success": "#34d399", "danger": "#f87171", "field": "#0f131b",
+        "track": "#2b3246",
     },
     "light": {
-        "bg": "#f4f6fb", "surface": "#ffffff", "surface2": "#eef1f7", "border": "#d9dee8",
-        "text": "#1b1f27", "muted": "#5c6675", "accent": "#2f6bff", "accent_fg": "#ffffff",
-        "success": "#1fa85a", "danger": "#e23b3b", "field": "#ffffff",
+        "bg": "#f5f7fb", "surface": "#ffffff", "surface2": "#f1f3f9", "raised": "#e8ecf5",
+        "border": "#e2e6ef", "text": "#131722", "muted": "#6b7280", "faint": "#9aa3b2",
+        "accent": "#4f6ef7", "accent_soft": "#e8edff", "accent_fg": "#ffffff",
+        "success": "#059669", "danger": "#dc2626", "field": "#f8fafc",
+        "track": "#d3d9e6",
     },
 }
 
 
 # --------------------------------------------------------------------------- #
-#  Key helpers: labels, string codec, and a parser for sequences / combos
+#  Key helpers
 # --------------------------------------------------------------------------- #
 # Some Key members only exist on certain platforms (e.g. Key.insert is absent on
 # macOS), so every entry is resolved defensively and simply skipped if missing.
@@ -105,11 +111,8 @@ def key_to_label(key):
 
 
 def key_to_str(key):
-    """Serialize a pynput key for JSON."""
     if isinstance(key, KeyCode):
-        if key.char is not None:
-            return "c:" + key.char
-        return "v:" + str(key.vk)
+        return ("c:" + key.char) if key.char is not None else ("v:" + str(key.vk))
     if isinstance(key, Key):
         return "k:" + key.name
     return "k:f6"
@@ -139,15 +142,107 @@ def parse_token(tok):
 
 
 def parse_sequence(text):
-    """'q w e r' or 'q,w,e,r' -> list of key objects (each tapped in order)."""
-    raw = text.replace(",", " ").split()
-    return [k for k in (parse_token(t) for t in raw) if k is not None]
+    """'q w e r' or 'q,w,e,r' -> list of keys, tapped in order."""
+    return [k for k in (parse_token(t) for t in text.replace(",", " ").split()) if k]
 
 
 def parse_combo(text):
-    """'ctrl+shift+a' -> list of keys pressed together then released in reverse."""
-    raw = text.replace(" ", "").split("+")
-    return [k for k in (parse_token(t) for t in raw if t) if k is not None]
+    """'ctrl+shift+a' -> keys held together, released in reverse."""
+    return [k for k in (parse_token(t) for t in text.replace(" ", "").split("+") if t) if k]
+
+
+# --------------------------------------------------------------------------- #
+#  Custom widgets
+# --------------------------------------------------------------------------- #
+class Toggle(tk.Canvas):
+    """A modern pill switch bound to a BooleanVar."""
+
+    W, H = 42, 24
+
+    def __init__(self, parent, variable, command=None, **kw):
+        super().__init__(parent, width=self.W, height=self.H, highlightthickness=0,
+                         bd=0, cursor="hand2", **kw)
+        self.var = variable
+        self.command = command
+        self.C = THEMES["dark"]
+        self.bind("<Button-1>", self._click)
+        self.var.trace_add("write", lambda *_: self.redraw())
+
+    def _click(self, _e=None):
+        self.var.set(not self.var.get())
+        if self.command:
+            self.command()
+
+    def _pill(self, x0, y0, x1, y1, color):
+        r = (y1 - y0) / 2
+        self.create_oval(x0, y0, x0 + 2 * r, y1, fill=color, outline=color)
+        self.create_oval(x1 - 2 * r, y0, x1, y1, fill=color, outline=color)
+        self.create_rectangle(x0 + r, y0, x1 - r, y1, fill=color, outline=color)
+
+    def redraw(self):
+        C = self.C
+        self.delete("all")
+        on = bool(self.var.get())
+        self.configure(bg=self._parent_bg())
+        self._pill(1, 3, self.W - 1, self.H - 3, C["accent"] if on else C["track"])
+        kx = self.W - 12 if on else 12
+        self.create_oval(kx - 8, 4, kx + 8, self.H - 4, fill="#ffffff", outline="#ffffff")
+
+    def _parent_bg(self):
+        try:
+            return self.master.cget("bg")
+        except tk.TclError:
+            return self.C["surface"]
+
+    def refresh_theme(self, C):
+        self.C = C
+        self.redraw()
+
+
+class Segmented(tk.Frame):
+    """A row of mutually exclusive pill buttons bound to a StringVar."""
+
+    def __init__(self, parent, variable, options, command=None, width=None):
+        super().__init__(parent, highlightthickness=0, bd=0)
+        self.var = variable
+        self.options = list(options)
+        self.command = command
+        self.C = THEMES["dark"]
+        self.btns = {}
+        for opt in self.options:
+            b = tk.Label(self, text=opt, font=(UI_FONT, 9), cursor="hand2",
+                         padx=12, pady=5)
+            if width:
+                b.configure(width=width)
+            b.pack(side="left", padx=(0, 3))
+            b.bind("<Button-1>", lambda _e, o=opt: self._pick(o))
+            self.btns[opt] = b
+        self.var.trace_add("write", lambda *_: self.redraw())
+
+    def _pick(self, opt):
+        self.var.set(opt)
+        if self.command:
+            self.command()
+
+    def redraw(self):
+        C = self.C
+        cur = self.var.get()
+        self.configure(bg=self._parent_bg())
+        for opt, b in self.btns.items():
+            if opt == cur:
+                b.configure(bg=C["accent"], fg=C["accent_fg"], font=(UI_FONT, 9, "bold"))
+            else:
+                b.configure(bg=C["surface2"], fg=C["muted"], font=(UI_FONT, 9))
+
+    def _parent_bg(self):
+        try:
+            return self.master.cget("bg")
+        except tk.TclError:
+            return self.C["surface"]
+
+    def refresh_theme(self, C):
+        self.C = C
+        self.redraw()
 
 
 # --------------------------------------------------------------------------- #
@@ -159,42 +254,36 @@ class AutoClickerApp:
         self.theme_name = "dark"
         self.C = THEMES[self.theme_name]
 
-        # per-feature run flags (mouse and key run independently)
         self.mouse_active = False
         self.key_active = False
         self.click_thread = None
         self.key_thread = None
 
-        # counters
-        self.run_clicks = 0           # clicks since this run started (for CPS)
-        self.total_clicks = 0         # all-time, persisted
+        self.run_clicks = 0
+        self.total_clicks = 0
         self._cps_last_count = 0
         self._cps_last_time = time.time()
 
-        # recording / picking state
-        self.recording_target = None  # 'spam' | 'master' | 'panic' | 'mouse_hk' | 'key_hk'
-        self._point_pick = None       # 'fixed' | 'multi' while capturing a screen point
+        self.recording_target = None
 
-        # configurable keys (plain attrs, read from the listener thread)
         self.spam_key = KeyCode.from_char("a")
         self.master_hotkey = Key.f6
         self.panic_hotkey = Key.f9
         self.mouse_hotkey = Key.f7
         self.key_hotkey = Key.f8
 
-        # mirrored plain flags (updated from Tk widgets, read in listener thread)
         self._hold_mode = False
         self._separate = False
         self._master_down = self._mouse_hk_down = self._key_hk_down = False
 
-        self.points = []             # list of (x, y) for multi-point mode
+        self.points = []
 
-        # controllers
         self.mouse_ctl = MouseController()
         self.kbd_ctl = KeyboardController()
 
-        self._themed = []
-        self.vars = {}               # name -> tk var (for save/load)
+        self._themed = []     # (widget, role)
+        self._custom = []     # widgets exposing refresh_theme
+        self.vars = {}
 
         self._build_ui()
         self._load_config()
@@ -203,7 +292,7 @@ class AutoClickerApp:
         self._tick_cps()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
-    # ---- tk var helpers ------------------------------------------------ #
+    # ---- vars ---------------------------------------------------------- #
     def _sv(self, name, default):
         v = tk.StringVar(value=default); self.vars[name] = v; return v
 
@@ -213,167 +302,287 @@ class AutoClickerApp:
     def _init_vars(self):
         # mouse
         self._bv("mouse_enabled", True)
-        self._sv("click_h", "0"); self._sv("click_m", "0"); self._sv("click_s", "0"); self._sv("click_ms", "100")
+        self._sv("click_val", "100"); self._sv("click_unit", "ms")
         self._sv("click_rand", "0")
         self._sv("mouse_button", "Left"); self._sv("click_type", "Single")
-        self._sv("target_mode", "Follow cursor")
+        self._sv("target_mode", "Cursor")
         self._sv("fixed_x", "0"); self._sv("fixed_y", "0")
         self._bv("smooth_move", False)
         self._bv("jitter_on", False); self._sv("jitter_px", "3")
         self._bv("hold_rand_on", False); self._sv("hold_min", "10"); self._sv("hold_max", "40")
-        self._bv("burst_on", False); self._sv("burst_n", "10"); self._sv("burst_pause", "1.0")
+        self._bv("burst_on", False); self._sv("burst_n", "10"); self._sv("burst_pause", "1")
         # key
         self._bv("key_enabled", False)
-        self._sv("key_mode", "Single key")
+        self._sv("key_mode", "Key")
         self._sv("key_value", "")
-        self._sv("key_h", "0"); self._sv("key_m", "0"); self._sv("key_s", "0"); self._sv("key_ms", "100")
+        self._sv("key_val_int", "100"); self._sv("key_unit", "ms")
         self._sv("key_rand", "0")
-        # global / settings
-        self._sv("activation", "toggle")           # toggle | hold
+        # settings
+        self._sv("activation", "Toggle")
         self._bv("separate_hotkeys", False)
-        self._sv("stop_mode", "none")              # none | count | time
+        self._sv("stop_mode", "Never")
         self._sv("stop_count", "100"); self._sv("stop_time", "10")
         self._sv("countdown", "0")
         self._bv("always_top", False)
-        self.status_text = self._sv("status", "Idle")
+        self.status_text = self._sv("status", "Ready")
 
-    # ---- window / layout ---------------------------------------------- #
+    # ---- shell --------------------------------------------------------- #
     def _build_ui(self):
         self.root.title(APP_NAME)
-        self.root.geometry("620x780")
-        self.root.minsize(560, 640)
+        self.root.geometry("600x760")
+        self.root.minsize(560, 620)
         self._init_vars()
         self.style = ttk.Style()
         try:
             self.style.theme_use("clam")
         except tk.TclError:
             pass
+        # define the slim scrollbar style up front — widgets reference it on creation
+        try:
+            self.style.layout("App.Vertical.TScrollbar", [
+                ("Vertical.Scrollbar.trough", {"sticky": "ns", "children": [
+                    ("Vertical.Scrollbar.thumb", {"expand": "1", "sticky": "nswe"})]})])
+        except tk.TclError:
+            pass
 
-        # top bar
-        self.topbar = tk.Frame(self.root, height=58); self.topbar.pack(fill="x")
-        self.topbar.pack_propagate(False); self._reg(self.topbar, "surface")
-        self.title_lbl = tk.Label(self.topbar, text=f"  ⚡  {APP_NAME}",
-                                  font=("Segoe UI", 14, "bold"), anchor="w")
-        self.title_lbl.pack(side="left", padx=10); self._reg(self.title_lbl, "title")
-        self.theme_btn = self._icon_button(self.topbar, "☾", self.toggle_theme)
-        self.settings_btn = self._icon_button(self.topbar, "⚙", lambda: self.show_page("settings"))
-        self.home_btn = self._icon_button(self.topbar, "⌂", lambda: self.show_page("home"))
-        self.theme_btn.pack(side="right", padx=(2, 12))
-        self.settings_btn.pack(side="right", padx=2)
-        self.home_btn.pack(side="right", padx=2)
+        # ---------- header ----------
+        self.topbar = tk.Frame(self.root, height=64)
+        self.topbar.pack(fill="x"); self.topbar.pack_propagate(False)
+        self._reg(self.topbar, "surface")
 
-        # page container
+        brand = tk.Frame(self.topbar); brand.pack(side="left", padx=20)
+        self._reg(brand, "surface")
+        self.title_lbl = tk.Label(brand, text="⚡  Kenan's AutoClicker",
+                                  font=(UI_FONT, 15, "bold"), anchor="w")
+        self.title_lbl.pack(anchor="w"); self._reg(self.title_lbl, "title")
+
+        icons = tk.Frame(self.topbar); icons.pack(side="right", padx=16)
+        self._reg(icons, "surface")
+        self.theme_btn = self._icon_button(icons, "☾", self.toggle_theme)
+        self.settings_btn = self._icon_button(icons, "⚙", lambda: self.show_page("settings"))
+        self.home_btn = self._icon_button(icons, "⌂", lambda: self.show_page("home"))
+        self.home_btn.pack(side="left", padx=3)
+        self.settings_btn.pack(side="left", padx=3)
+        self.theme_btn.pack(side="left", padx=3)
+
+        self.divider = tk.Frame(self.root, height=1); self.divider.pack(fill="x")
+        self._reg(self.divider, "border_fill")
+
+        # ---------- pages ----------
         self.container = tk.Frame(self.root); self.container.pack(fill="both", expand=True)
         self._reg(self.container, "bg")
         self.pages = {"home": self._build_home(), "settings": self._build_settings()}
         self.show_page("home")
 
-        # bottom action bar
-        self.actionbar = tk.Frame(self.root, height=78); self.actionbar.pack(fill="x", side="bottom")
-        self.actionbar.pack_propagate(False); self._reg(self.actionbar, "surface")
-        left = tk.Frame(self.actionbar); left.pack(side="left", padx=16); self._reg(left, "surface")
-        self.status_lbl = tk.Label(left, textvariable=self.status_text, font=("Segoe UI", 10), anchor="w")
-        self.status_lbl.pack(anchor="w"); self._reg(self.status_lbl, "muted")
-        self.cps_var = tk.StringVar(value="CPS: 0.0   •   Total: 0")
-        self.cps_lbl = tk.Label(left, textvariable=self.cps_var, font=("Segoe UI", 9), anchor="w")
-        self.cps_lbl.pack(anchor="w"); self._reg(self.cps_lbl, "muted")
-        self.action_btn = tk.Button(self.actionbar, text="▶  Start  (F6)", font=("Segoe UI", 12, "bold"),
-                                    relief="flat", cursor="hand2", command=self.master_toggle,
-                                    bd=0, padx=24, pady=10)
-        self.action_btn.pack(side="right", padx=16, pady=16); self._reg(self.action_btn, "primary")
+        # ---------- footer ----------
+        self.footdiv = tk.Frame(self.root, height=1); self.footdiv.pack(fill="x", side="bottom")
+        self._reg(self.footdiv, "border_fill")
+
+        self.actionbar = tk.Frame(self.root, height=84)
+        self.actionbar.pack(fill="x", side="bottom"); self.actionbar.pack_propagate(False)
+        self._reg(self.actionbar, "surface")
+
+        left = tk.Frame(self.actionbar); left.pack(side="left", padx=20)
+        self._reg(left, "surface")
+        self.status_lbl = tk.Label(left, textvariable=self.status_text,
+                                   font=(UI_FONT, 11, "bold"), anchor="w")
+        self.status_lbl.pack(anchor="w"); self._reg(self.status_lbl, "title")
+        self.cps_var = tk.StringVar(value="0.0 CPS  ·  0 total")
+        self.cps_lbl = tk.Label(left, textvariable=self.cps_var, font=(UI_FONT, 9), anchor="w")
+        self.cps_lbl.pack(anchor="w", pady=(2, 0)); self._reg(self.cps_lbl, "muted")
+
+        self.action_btn = tk.Label(self.actionbar, text="▶   Start", font=(UI_FONT, 12, "bold"),
+                                   cursor="hand2", padx=32, pady=12)
+        self.action_btn.pack(side="right", padx=20)
+        self.action_btn.bind("<Button-1>", lambda _e: self.master_toggle())
+        self._reg(self.action_btn, "primary")
 
     def _make_scrollable(self, parent):
         canvas = tk.Canvas(parent, highlightthickness=0, bd=0); self._reg(canvas, "bg")
-        sb = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        sb = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview,
+                           style="App.Vertical.TScrollbar")
         inner = tk.Frame(canvas); self._reg(inner, "bg")
         win = canvas.create_window((0, 0), window=inner, anchor="nw")
         canvas.configure(yscrollcommand=sb.set)
-        canvas.pack(side="left", fill="both", expand=True); sb.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
         inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda e: canvas.itemconfig(win, width=e.width))
 
         def _wheel(e):
             canvas.yview_scroll(int(-1 * (e.delta / 120)) if e.delta else (-1 if e.num == 4 else 1), "units")
-        canvas.bind_all("<MouseWheel>", _wheel)
-        canvas.bind_all("<Button-4>", _wheel); canvas.bind_all("<Button-5>", _wheel)
+        for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            canvas.bind_all(seq, _wheel)
         return inner
+
+    # ---- layout primitives --------------------------------------------- #
+    def _card(self, parent, title, toggle_var=None):
+        """A padded surface block with an optional switch in its header."""
+        outer = tk.Frame(parent, highlightthickness=1, bd=0)
+        outer.pack(fill="x", padx=18, pady=(14, 0))
+        self._reg(outer, "card")
+
+        head = tk.Frame(outer); head.pack(fill="x", padx=18, pady=(15, 0))
+        self._reg(head, "surface")
+        lbl = tk.Label(head, text=title, font=(UI_FONT, 11, "bold"), anchor="w")
+        lbl.pack(side="left"); self._reg(lbl, "title")
+        if toggle_var is not None:
+            t = Toggle(head, toggle_var)
+            t.pack(side="right"); self._custom.append(t)
+
+        body = tk.Frame(outer); body.pack(fill="x", padx=18, pady=(12, 16))
+        self._reg(body, "surface")
+        return body
+
+    def _row(self, parent, label, hint=None):
+        """One setting line: label (+optional hint) on the left, controls right."""
+        r = tk.Frame(parent); r.pack(fill="x", pady=5)
+        self._reg(r, "surface")
+        lf = tk.Frame(r); lf.pack(side="left", anchor="w")
+        self._reg(lf, "surface")
+        l = tk.Label(lf, text=label, font=(UI_FONT, 10), anchor="w")
+        l.pack(anchor="w"); self._reg(l, "label")
+        if hint:
+            h = tk.Label(lf, text=hint, font=(UI_FONT, 8), anchor="w")
+            h.pack(anchor="w"); self._reg(h, "faint")
+        ctrl = tk.Frame(r); ctrl.pack(side="right", anchor="e")
+        self._reg(ctrl, "surface")
+        ctrl.row = r          # so callers can re-pack the whole line
+        return ctrl
+
+    def _right_stack(self, ctrl, widgets):
+        """Pack widgets right-aligned, so trailing controls line up across rows."""
+        for w in reversed(widgets):
+            w.pack(side="right", padx=(4, 0))
+
+    def _sep(self, parent):
+        s = tk.Frame(parent, height=1); s.pack(fill="x", pady=9)
+        self._reg(s, "border_fill")
+
+    def _sub(self, parent, text):
+        l = tk.Label(parent, text=text.upper(), font=(UI_FONT, 8, "bold"), anchor="w")
+        l.pack(anchor="w", pady=(10, 2)); self._reg(l, "faint")
 
     # ---- HOME ---------------------------------------------------------- #
     def _build_home(self):
         page = tk.Frame(self.container); self._reg(page, "bg")
         body = self._make_scrollable(page)
 
-        # ===== Auto Clicker =====
-        _, c = self._card(body, "🖱  Auto Clicker")
-        self._checkbox(c, "Enable mouse clicking", self.vars["mouse_enabled"]).grid(
-            row=0, column=0, columnspan=6, sticky="w", pady=(0, 8))
-        self._interval_row(c, 1, "click_h", "click_m", "click_s", "click_ms", "click_rand")
+        # ============ CLICKER ============
+        c = self._card(body, "Auto Clicker", self.vars["mouse_enabled"])
 
-        o = tk.Frame(c); self._reg(o, "surface"); o.grid(row=2, column=0, columnspan=6, sticky="w", pady=(10, 0))
-        self._field_label(o, "Button").grid(row=0, column=0, padx=(0, 6))
-        self._combo(o, self.vars["mouse_button"], ["Left", "Right", "Middle"], 8).grid(row=0, column=1, padx=(0, 16))
-        self._field_label(o, "Type").grid(row=0, column=2, padx=(0, 6))
-        self._combo(o, self.vars["click_type"], ["Single", "Double"], 8).grid(row=0, column=3)
+        ctrl = self._row(c, "Interval")
+        self._right_stack(ctrl, [
+            self._entry(ctrl, self.vars["click_val"], 6),
+            self._unit(ctrl, self.vars["click_unit"])])
 
-        # target
-        t = tk.Frame(c); self._reg(t, "surface"); t.grid(row=3, column=0, columnspan=6, sticky="w", pady=(10, 0))
-        self._field_label(t, "Click at").grid(row=0, column=0, padx=(0, 6))
-        self._combo(t, self.vars["target_mode"],
-                    ["Follow cursor", "Fixed point", "Multi-point sequence"], 18).grid(row=0, column=1, padx=(0, 12))
-        self._field_label(t, "X").grid(row=0, column=2, padx=(0, 4))
-        self._entry(t, self.vars["fixed_x"], 6).grid(row=0, column=3, padx=(0, 6))
-        self._field_label(t, "Y").grid(row=0, column=4, padx=(0, 4))
-        self._entry(t, self.vars["fixed_y"], 6).grid(row=0, column=5, padx=(0, 8))
-        self._soft_button(t, "🎯 Pick point", self._pick_point).grid(row=0, column=6)
-        self._checkbox(t, "Move smoothly to target", self.vars["smooth_move"]).grid(
-            row=1, column=0, columnspan=7, sticky="w", pady=(6, 0))
+        ctrl = self._row(c, "Randomize", "keeps the rhythm human")
+        self._right_stack(ctrl, [
+            self._pm(ctrl),
+            self._entry(ctrl, self.vars["click_rand"], 5),
+            self._unit_label(ctrl, "ms")])
 
-        pf = tk.Frame(c); self._reg(pf, "surface"); pf.grid(row=4, column=0, columnspan=6, sticky="w", pady=(6, 0))
-        self._field_label(pf, "Points").grid(row=0, column=0, sticky="nw", padx=(0, 6))
-        self.points_lbl = tk.Label(pf, text="(none)", font=("Segoe UI", 9), justify="left", anchor="w")
-        self.points_lbl.grid(row=0, column=1, sticky="w"); self._reg(self.points_lbl, "muted")
-        self._soft_button(pf, "Clear", self._clear_points).grid(row=0, column=2, padx=(10, 0))
+        self._sep(c)
 
-        # jitter / hold / burst
-        j = tk.Frame(c); self._reg(j, "surface"); j.grid(row=5, column=0, columnspan=6, sticky="w", pady=(10, 0))
-        self._checkbox(j, "Jitter ±", self.vars["jitter_on"]).grid(row=0, column=0, sticky="w")
-        self._entry(j, self.vars["jitter_px"], 5).grid(row=0, column=1, padx=(4, 2))
-        self._field_label(j, "px").grid(row=0, column=2, padx=(0, 16))
-        self._checkbox(j, "Random hold", self.vars["hold_rand_on"]).grid(row=0, column=3, sticky="w")
-        self._entry(j, self.vars["hold_min"], 5).grid(row=0, column=4, padx=(4, 2))
-        self._field_label(j, "–").grid(row=0, column=5)
-        self._entry(j, self.vars["hold_max"], 5).grid(row=0, column=6, padx=(2, 2))
-        self._field_label(j, "ms").grid(row=0, column=7)
+        ctrl = self._row(c, "Button")
+        self._seg(ctrl, self.vars["mouse_button"], ["Left", "Right", "Middle"]).pack()
 
-        b = tk.Frame(c); self._reg(b, "surface"); b.grid(row=6, column=0, columnspan=6, sticky="w", pady=(8, 0))
-        self._checkbox(b, "Burst mode:", self.vars["burst_on"]).grid(row=0, column=0, sticky="w")
-        self._entry(b, self.vars["burst_n"], 5).grid(row=0, column=1, padx=(4, 2))
-        self._field_label(b, "clicks, then pause").grid(row=0, column=2, padx=(0, 6))
-        self._entry(b, self.vars["burst_pause"], 5).grid(row=0, column=3, padx=(0, 2))
-        self._field_label(b, "s").grid(row=0, column=4)
+        ctrl = self._row(c, "Click")
+        self._seg(ctrl, self.vars["click_type"], ["Single", "Double"]).pack()
 
-        # ===== Auto Key Presser =====
-        _, k = self._card(body, "⌨  Auto Key Presser")
-        self._checkbox(k, "Enable key pressing", self.vars["key_enabled"]).grid(
-            row=0, column=0, columnspan=6, sticky="w", pady=(0, 8))
-        m = tk.Frame(k); self._reg(m, "surface"); m.grid(row=1, column=0, columnspan=6, sticky="w")
-        self._field_label(m, "Mode").grid(row=0, column=0, padx=(0, 6))
-        self._combo(m, self.vars["key_mode"],
-                    ["Single key", "Sequence", "Combo", "Type text"], 14).grid(row=0, column=1, padx=(0, 12))
-        self.key_display = tk.Label(m, text=key_to_label(self.spam_key), font=("Segoe UI", 10, "bold"),
-                                    width=8, padx=8, pady=4)
-        self.key_display.grid(row=0, column=2, padx=(0, 8)); self._reg(self.key_display, "chip")
-        self._soft_button(m, "Record", lambda: self._start_recording("spam")).grid(row=0, column=3)
+        self._sep(c)
 
-        vrow = tk.Frame(k); self._reg(vrow, "surface"); vrow.grid(row=2, column=0, columnspan=6, sticky="w", pady=(8, 0))
-        self.keyval_hint = self._field_label(vrow, "Sequence / combo / text")
-        self.keyval_hint.grid(row=0, column=0, sticky="w", padx=(0, 6))
-        self._entry(vrow, self.vars["key_value"], 30).grid(row=0, column=1, sticky="w")
-        hint = tk.Label(k, font=("Segoe UI", 8), justify="left", anchor="w",
-                        text="Sequence: q w e r   •   Combo: ctrl+shift+a   •   Text: any words")
-        hint.grid(row=3, column=0, columnspan=6, sticky="w", pady=(4, 0)); self._reg(hint, "muted")
+        ctrl = self._row(c, "Click at")
+        self.target_row = ctrl.row
+        self._seg(ctrl, self.vars["target_mode"], ["Cursor", "Fixed", "Multi"],
+                  command=self._refresh_target_ui).pack()
 
-        self._interval_row(k, 4, "key_h", "key_m", "key_s", "key_ms", "key_rand")
+        # --- Fixed point: pick + X/Y (packed under "Click at" on demand) ---
+        ctrl = self._row(c, "Position")
+        self.pos_row = ctrl.row
+        self._right_stack(ctrl, [
+            self._icon_pill(ctrl, "Pick point", self._pick_point),
+            self._entry(ctrl, self.vars["fixed_x"], 5),
+            self._unit_label(ctrl, "x"),
+            self._entry(ctrl, self.vars["fixed_y"], 5),
+            self._unit_label(ctrl, "y")])
+
+        # --- Multi point: add to a list ---
+        ctrl = self._row(c, "Points", "clicked in order, looping")
+        self.points_row = ctrl.row
+        self.points_lbl = tk.Label(ctrl, text="none yet", font=(UI_FONT, 9))
+        self._reg(self.points_lbl, "muted")
+        self._right_stack(ctrl, [
+            self._icon_pill(ctrl, "Add point", self._pick_point),
+            self.points_lbl,
+            self._icon_pill(ctrl, "Clear", self._clear_points)])
+
+        ctrl = self._row(c, "Move smoothly", "glide like a real hand")
+        self._toggle(ctrl, self.vars["smooth_move"]).pack(side="right")
+
+        self._sep(c)
+        self._sub(c, "Humanize")
+
+        ctrl = self._row(c, "Jitter", "random pixel wobble")
+        self._right_stack(ctrl, [
+            self._pm(ctrl),
+            self._entry(ctrl, self.vars["jitter_px"], 4),
+            self._unit_label(ctrl, "px"),
+            self._toggle(ctrl, self.vars["jitter_on"])])
+
+        ctrl = self._row(c, "Random hold", "vary how long it presses")
+        self._right_stack(ctrl, [
+            self._entry(ctrl, self.vars["hold_min"], 4),
+            self._unit_label(ctrl, "–"),
+            self._entry(ctrl, self.vars["hold_max"], 4),
+            self._unit_label(ctrl, "ms"),
+            self._toggle(ctrl, self.vars["hold_rand_on"])])
+
+        ctrl = self._row(c, "Burst", "click a batch, then rest")
+        self._right_stack(ctrl, [
+            self._entry(ctrl, self.vars["burst_n"], 4),
+            self._unit_label(ctrl, "×, rest"),
+            self._entry(ctrl, self.vars["burst_pause"], 4),
+            self._unit_label(ctrl, "s"),
+            self._toggle(ctrl, self.vars["burst_on"])])
+
+        # ============ KEY ============
+        k = self._card(body, "Auto Key Presser", self.vars["key_enabled"])
+
+        ctrl = self._row(k, "Mode")
+        self._seg(ctrl, self.vars["key_mode"], ["Key", "Sequence", "Combo", "Text"],
+                  command=self._refresh_key_ui).pack()
+
+        ctrl = self._row(k, "Key")
+        self.key_row = ctrl.row
+        self.key_display = tk.Label(ctrl, text=key_to_label(self.spam_key),
+                                    font=(UI_FONT, 10, "bold"), width=7, padx=10, pady=5)
+        self._reg(self.key_display, "chip")
+        self._right_stack(ctrl, [
+            self.key_display,
+            self._icon_pill(ctrl, "Record", lambda: self._start_recording("spam"))])
+
+        ctrl = self._row(k, "Value")
+        self.keyval_row = ctrl.row
+        self.keyval_entry = self._entry(ctrl, self.vars["key_value"], 24)
+        self.keyval_entry.pack(side="right")
+        self.keyval_hint = tk.Label(k, text="", font=(UI_FONT, 8), anchor="w")
+        self.keyval_hint.pack(anchor="w"); self._reg(self.keyval_hint, "faint")
+
+        self._sep(k)
+
+        ctrl = self._row(k, "Interval")
+        self._right_stack(ctrl, [
+            self._entry(ctrl, self.vars["key_val_int"], 6),
+            self._unit(ctrl, self.vars["key_unit"])])
+
+        ctrl = self._row(k, "Randomize")
+        self._right_stack(ctrl, [
+            self._pm(ctrl),
+            self._entry(ctrl, self.vars["key_rand"], 5),
+            self._unit_label(ctrl, "ms")])
+
+        spacer = tk.Frame(body, height=18); spacer.pack(); self._reg(spacer, "bg")
         return page
 
     # ---- SETTINGS ------------------------------------------------------ #
@@ -381,114 +590,151 @@ class AutoClickerApp:
         page = tk.Frame(self.container); self._reg(page, "bg")
         body = self._make_scrollable(page)
 
-        _, a = self._card(body, "🎮  Activation")
-        self._radio(a, "Toggle  (press hotkey to start, press again to stop)",
-                    self.vars["activation"], "toggle", self._sync_flags).grid(row=0, column=0, sticky="w")
-        self._radio(a, "Hold  (runs only while you hold the hotkey)",
-                    self.vars["activation"], "hold", self._sync_flags).grid(row=1, column=0, sticky="w", pady=(4, 0))
+        a = self._card(body, "Activation")
+        ctrl = self._row(a, "Mode", "hold = runs only while the key is held")
+        self._seg(ctrl, self.vars["activation"], ["Toggle", "Hold"],
+                  command=self._sync_flags).pack(side="right")
 
-        _, h = self._card(body, "🎯  Hotkeys")
-        self.hk_master = self._hotkey_row(h, 0, "Start / Stop", "master")
-        self.hk_panic = self._hotkey_row(h, 1, "Panic (stop now)", "panic")
-        self._checkbox(h, "Use separate hotkeys for mouse and key", self.vars["separate_hotkeys"],
-                       self._sync_flags).grid(row=2, column=0, columnspan=4, sticky="w", pady=(8, 2))
-        self.hk_mouse = self._hotkey_row(h, 3, "Mouse only", "mouse_hk")
-        self.hk_key = self._hotkey_row(h, 4, "Key only", "key_hk")
+        h = self._card(body, "Hotkeys")
+        self.hk_master = self._hotkey_row(h, "Start / stop", "master")
+        self.hk_panic = self._hotkey_row(h, "Panic stop", "panic")
+        self._sep(h)
+        ctrl = self._row(h, "Separate keys", "control mouse and keyboard apart")
+        self._toggle(ctrl, self.vars["separate_hotkeys"], self._sync_flags).pack(side="right")
+        self.hk_mouse = self._hotkey_row(h, "Mouse only", "mouse_hk")
+        self.hk_key = self._hotkey_row(h, "Key only", "key_hk")
 
-        _, s = self._card(body, "⏱  Stop after / Countdown")
-        self._radio(s, "Never stop (until I stop it)", self.vars["stop_mode"], "none").grid(row=0, column=0, columnspan=3, sticky="w")
-        self._radio(s, "After", self.vars["stop_mode"], "count").grid(row=1, column=0, sticky="w")
-        self._entry(s, self.vars["stop_count"], 7).grid(row=1, column=1, padx=6)
-        self._field_label(s, "actions").grid(row=1, column=2, sticky="w")
-        self._radio(s, "After", self.vars["stop_mode"], "time").grid(row=2, column=0, sticky="w")
-        self._entry(s, self.vars["stop_time"], 7).grid(row=2, column=1, padx=6)
-        self._field_label(s, "seconds").grid(row=2, column=2, sticky="w")
-        cd = tk.Frame(s); self._reg(cd, "surface"); cd.grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
-        self._field_label(cd, "Start countdown").grid(row=0, column=0, padx=(0, 6))
-        self._entry(cd, self.vars["countdown"], 5).grid(row=0, column=1)
-        self._field_label(cd, "seconds").grid(row=0, column=2, padx=(6, 0))
+        s = self._card(body, "Limits")
+        ctrl = self._row(s, "Stop after")
+        self._seg(ctrl, self.vars["stop_mode"], ["Never", "Count", "Time"],
+                  command=self._refresh_limit_ui).pack(side="right")
+        ctrl = self._row(s, "Value")
+        self.limit_row = ctrl.row
+        self.limit_unit = tk.Label(ctrl, text="", font=(UI_FONT, 9))
+        self.limit_unit.pack(side="right", padx=(6, 0)); self._reg(self.limit_unit, "muted")
+        self.limit_entry_c = self._entry(ctrl, self.vars["stop_count"], 7)
+        self.limit_entry_t = self._entry(ctrl, self.vars["stop_time"], 7)
 
-        _, w = self._card(body, "🪟  Window & Profiles")
-        self._checkbox(w, "Always on top", self.vars["always_top"], self._apply_always_top).grid(
-            row=0, column=0, columnspan=3, sticky="w")
-        self._soft_button(w, "💾 Save profile…", self._save_profile).grid(row=1, column=0, sticky="w", pady=(8, 0))
-        self._soft_button(w, "📂 Load profile…", self._load_profile).grid(row=1, column=1, sticky="w", padx=8, pady=(8, 0))
-        note = tk.Label(w, font=("Segoe UI", 8), anchor="w",
-                        text="Your last settings are also saved automatically on exit.")
-        note.grid(row=2, column=0, columnspan=3, sticky="w", pady=(6, 0)); self._reg(note, "muted")
+        ctrl = self._row(s, "Countdown", "delay before it starts")
+        self._right_stack(ctrl, [
+            self._entry(ctrl, self.vars["countdown"], 5),
+            self._unit_label(ctrl, "s")])
 
-        _, st = self._card(body, "📊  Stats")
-        self.stat_lbl = tk.Label(st, text="All-time clicks: 0", font=("Segoe UI", 10), anchor="w")
-        self.stat_lbl.grid(row=0, column=0, sticky="w"); self._reg(self.stat_lbl, "muted")
-        self._soft_button(st, "Reset", self._reset_stats).grid(row=0, column=1, padx=(12, 0))
+        w = self._card(body, "Window")
+        ctrl = self._row(w, "Always on top")
+        self._toggle(ctrl, self.vars["always_top"], self._apply_always_top).pack(side="right")
 
-        _, ab = self._card(body, "ℹ  About")
-        about = tk.Label(ab, justify="left", anchor="w", font=("Segoe UI", 9),
-                         text=(f"{APP_NAME}\nAuto clicker + key presser with humanization, macros,\n"
-                               "profiles and global hotkeys.  Built with Python + tkinter + pynput."))
-        about.grid(row=0, column=0, sticky="w"); self._reg(about, "muted")
+        p = self._card(body, "Profiles")
+        ctrl = self._row(p, "Saved setups", "your last setup is remembered automatically")
+        self._right_stack(ctrl, [
+            self._icon_pill(ctrl, "Save", self._save_profile),
+            self._icon_pill(ctrl, "Load", self._load_profile)])
+
+        st = self._card(body, "Stats")
+        ctrl = self._row(st, "All-time actions")
+        self.stat_lbl = tk.Label(ctrl, text="0", font=(UI_FONT, 12, "bold"))
+        self._reg(self.stat_lbl, "title")
+        self._right_stack(ctrl, [
+            self.stat_lbl,
+            self._icon_pill(ctrl, "Reset", self._reset_stats)])
+
+        ab = self._card(body, "About")
+        about = tk.Label(ab, justify="left", anchor="w", font=(UI_FONT, 9),
+                         text="Auto clicker + key presser with humanization, macros,\n"
+                              "profiles and global hotkeys.\n\n"
+                              "Python · tkinter · pynput")
+        about.pack(anchor="w"); self._reg(about, "muted")
+
+        spacer = tk.Frame(body, height=18); spacer.pack(); self._reg(spacer, "bg")
         return page
 
-    def _hotkey_row(self, parent, row, label, target):
-        f = tk.Frame(parent); self._reg(f, "surface"); f.grid(row=row, column=0, columnspan=4, sticky="w", pady=2)
-        self._field_label(f, label).grid(row=0, column=0, sticky="w", padx=(0, 8))
-        disp = tk.Label(f, text=key_to_label(getattr(self, {
-            "master": "master_hotkey", "panic": "panic_hotkey",
-            "mouse_hk": "mouse_hotkey", "key_hk": "key_hotkey"}[target])),
-            font=("Segoe UI", 10, "bold"), width=8, padx=8, pady=4)
-        disp.grid(row=0, column=1, padx=(0, 8)); self._reg(disp, "chip")
-        self._soft_button(f, "Rebind", lambda: self._start_recording(target)).grid(row=0, column=2)
+    def _hotkey_row(self, parent, label, target):
+        ctrl = self._row(parent, label)
+        disp = tk.Label(ctrl, text=key_to_label(self._hk_of(target)),
+                        font=(UI_FONT, 10, "bold"), width=7, padx=10, pady=5)
+        self._reg(disp, "chip")
+        self._right_stack(ctrl, [
+            disp,
+            self._icon_pill(ctrl, "Rebind", lambda: self._start_recording(target))])
         return disp
 
-    # ---- small widget builders ---------------------------------------- #
-    def _card(self, parent, title):
-        outer = tk.Frame(parent, highlightthickness=1, bd=0); outer.pack(fill="x", padx=16, pady=(16, 0))
-        self._reg(outer, "card")
-        head = tk.Label(outer, text=title, font=("Segoe UI", 11, "bold"), anchor="w")
-        head.pack(fill="x", padx=16, pady=(12, 4)); self._reg(head, "title")
-        inner = tk.Frame(outer); inner.pack(fill="x", padx=16, pady=(4, 14)); self._reg(inner, "surface")
-        return outer, inner
+    def _hk_of(self, target):
+        return {"master": self.master_hotkey, "panic": self.panic_hotkey,
+                "mouse_hk": self.mouse_hotkey, "key_hk": self.key_hotkey}[target]
 
-    def _interval_row(self, parent, row, hn, mn, sn, msn, randn):
-        f = tk.Frame(parent); self._reg(f, "surface"); f.grid(row=row, column=0, columnspan=8, sticky="w")
-        self._field_label(f, "Interval").grid(row=0, column=0, columnspan=10, sticky="w", pady=(0, 4))
-        for i, (lab, name) in enumerate([("hours", hn), ("mins", mn), ("secs", sn), ("ms", msn)]):
-            self._entry(f, self.vars[name], 5).grid(row=1, column=i * 2, padx=(0, 4))
-            self._field_label(f, lab).grid(row=1, column=i * 2 + 1, padx=(0, 12))
-        self._field_label(f, "randomize ±").grid(row=1, column=8, padx=(4, 4))
-        self._entry(f, self.vars[randn], 5).grid(row=1, column=9)
-        self._field_label(f, "ms").grid(row=1, column=10, padx=(4, 0))
+    # ---- control factories --------------------------------------------- #
+    def _toggle(self, parent, var, command=None):
+        t = Toggle(parent, var, command); self._custom.append(t); return t
 
-    def _icon_button(self, parent, glyph, command):
-        b = tk.Button(parent, text=glyph, command=command, relief="flat", bd=0, cursor="hand2",
-                      font=("Segoe UI", 15), width=3, height=1); self._reg(b, "icon"); return b
-
-    def _soft_button(self, parent, text, command):
-        b = tk.Button(parent, text=text, command=command, relief="flat", bd=0, cursor="hand2",
-                      font=("Segoe UI", 9), padx=10, pady=4); self._reg(b, "soft"); return b
-
-    def _field_label(self, parent, text):
-        l = tk.Label(parent, text=text, font=("Segoe UI", 9)); self._reg(l, "muted"); return l
+    def _seg(self, parent, var, options, command=None):
+        s = Segmented(parent, var, options, command); self._custom.append(s); return s
 
     def _entry(self, parent, var, width):
         e = tk.Entry(parent, textvariable=var, width=width, relief="flat", justify="center",
-                     font=("Segoe UI", 10), highlightthickness=1, bd=4); self._reg(e, "field"); return e
+                     font=(UI_FONT, 10), highlightthickness=1, bd=6)
+        self._reg(e, "field"); return e
 
-    def _combo(self, parent, var, values, width):
-        c = ttk.Combobox(parent, textvariable=var, values=values, width=width, state="readonly",
-                         font=("Segoe UI", 10)); return c
+    def _unit(self, parent, var):
+        return self._seg(parent, var, ["ms", "sec", "min"])
 
-    def _checkbox(self, parent, text, var, command=None):
-        c = tk.Checkbutton(parent, text=text, variable=var, font=("Segoe UI", 10), anchor="w",
-                           relief="flat", bd=0, highlightthickness=0, cursor="hand2", command=command)
-        self._reg(c, "check"); return c
+    def _unit_label(self, parent, text):
+        l = tk.Label(parent, text=text, font=(UI_FONT, 9)); self._reg(l, "muted"); return l
 
-    def _radio(self, parent, text, var, value, command=None):
-        r = tk.Radiobutton(parent, text=text, variable=var, value=value, font=("Segoe UI", 10),
-                           anchor="w", relief="flat", bd=0, highlightthickness=0, cursor="hand2", command=command)
-        self._reg(r, "check"); return r
+    def _pm(self, parent):
+        """The '±' prefix. Left unpacked so callers control placement."""
+        l = tk.Label(parent, text="±", font=(UI_FONT, 10))
+        self._reg(l, "muted"); return l
 
-    # ---- theming ------------------------------------------------------- #
+    def _icon_pill(self, parent, text, command):
+        b = tk.Label(parent, text=text, font=(UI_FONT, 9), cursor="hand2", padx=12, pady=5)
+        b.bind("<Button-1>", lambda _e: command())
+        self._reg(b, "soft"); return b
+
+    def _icon_button(self, parent, glyph, command):
+        b = tk.Label(parent, text=glyph, font=(UI_FONT, 14), cursor="hand2",
+                     width=2, padx=6, pady=5)
+        b.bind("<Button-1>", lambda _e: command())
+        self._reg(b, "icon"); return b
+
+    # ---- conditional UI ------------------------------------------------- #
+    def _refresh_target_ui(self):
+        """Show the position controls that match the chosen target, in place."""
+        mode = self.vars["target_mode"].get()
+        self.pos_row.pack_forget()
+        self.points_row.pack_forget()
+        if mode == "Fixed":
+            self.pos_row.pack(fill="x", pady=5, after=self.target_row)
+        elif mode == "Multi":
+            self.points_row.pack(fill="x", pady=5, after=self.target_row)
+        self._refresh_points()
+
+    def _refresh_key_ui(self):
+        mode = self.vars["key_mode"].get()
+        hints = {"Sequence": "space or comma separated  —  e.g.  q w e r",
+                 "Combo": "join with +  —  e.g.  ctrl+shift+a",
+                 "Text": "any words, typed out each time"}
+        self.key_row.pack_forget()
+        self.keyval_row.pack_forget()
+        if mode == "Key":
+            self.key_row.pack(fill="x", pady=5)
+            self.keyval_hint.configure(text="")
+        else:
+            self.keyval_row.pack(fill="x", pady=5)
+            self.keyval_hint.configure(text=hints.get(mode, ""))
+
+    def _refresh_limit_ui(self):
+        mode = self.vars["stop_mode"].get()
+        self.limit_entry_c.pack_forget(); self.limit_entry_t.pack_forget()
+        self.limit_row.pack_forget()
+        if mode == "Never":
+            return
+        self.limit_row.pack(fill="x", pady=5)
+        if mode == "Count":
+            self.limit_entry_c.pack(side="right"); self.limit_unit.configure(text="actions")
+        else:
+            self.limit_entry_t.pack(side="right"); self.limit_unit.configure(text="seconds")
+
+    # ---- theming -------------------------------------------------------- #
     def _reg(self, widget, role):
         self._themed.append((widget, role))
 
@@ -500,33 +746,42 @@ class AutoClickerApp:
                 self._apply_role(w, role, C)
             except tk.TclError:
                 pass
-        self.style.configure("TCombobox", fieldbackground=C["field"], background=C["surface2"],
-                             foreground=C["text"], arrowcolor=C["text"], bordercolor=C["border"], relief="flat")
-        self.style.map("TCombobox", fieldbackground=[("readonly", C["field"])],
-                      foreground=[("readonly", C["text"])])
-        self.style.configure("TScrollbar", background=C["surface2"], troughcolor=C["bg"],
-                             bordercolor=C["bg"], arrowcolor=C["muted"])
+        for w in self._custom:
+            try:
+                w.refresh_theme(C)
+            except tk.TclError:
+                pass
+        # a flat, arrow-less scrollbar that blends into the page
+        self.style.configure("App.Vertical.TScrollbar", troughcolor=C["bg"],
+                             background=C["track"], bordercolor=C["bg"],
+                             darkcolor=C["track"], lightcolor=C["track"],
+                             relief="flat", borderwidth=0, arrowsize=0, width=8)
+        self.style.map("App.Vertical.TScrollbar",
+                       background=[("active", C["faint"]), ("!active", C["track"])])
         self.theme_btn.configure(text="☀" if self.theme_name == "dark" else "☾")
+        self._refresh_running_ui()
 
     def _apply_role(self, w, role, C):
-        r = {
+        roles = {
             "bg": dict(bg=C["bg"]),
             "surface": dict(bg=C["surface"]),
-            "surface2": dict(bg=C["surface2"]),
-            "card": dict(bg=C["surface"], highlightbackground=C["border"], highlightcolor=C["border"]),
+            "border_fill": dict(bg=C["border"]),
+            "card": dict(bg=C["surface"], highlightbackground=C["border"],
+                         highlightcolor=C["border"]),
             "title": dict(bg=C["surface"], fg=C["text"]),
+            "label": dict(bg=C["surface"], fg=C["text"]),
             "muted": dict(bg=C["surface"], fg=C["muted"]),
+            "faint": dict(bg=C["surface"], fg=C["faint"]),
             "field": dict(bg=C["field"], fg=C["text"], insertbackground=C["text"],
-                          highlightbackground=C["border"], highlightcolor=C["accent"]),
-            "chip": dict(bg=C["surface2"], fg=C["accent"]),
-            "check": dict(bg=C["surface"], fg=C["text"], activebackground=C["surface"],
-                          activeforeground=C["text"], selectcolor=C["field"]),
-            "icon": dict(bg=C["surface"], fg=C["muted"], activebackground=C["surface2"], activeforeground=C["accent"]),
-            "soft": dict(bg=C["surface2"], fg=C["text"], activebackground=C["border"], activeforeground=C["text"]),
-            "primary": dict(bg=C["accent"], fg=C["accent_fg"], activebackground=C["accent"], activeforeground=C["accent_fg"]),
-        }.get(role)
-        if r:
-            w.configure(**r)
+                          highlightbackground=C["border"], highlightcolor=C["accent"],
+                          disabledbackground=C["surface2"]),
+            "chip": dict(bg=C["accent_soft"], fg=C["accent"]),
+            "icon": dict(bg=C["surface"], fg=C["muted"]),
+            "soft": dict(bg=C["surface2"], fg=C["text"]),
+            "primary": dict(bg=C["accent"], fg=C["accent_fg"]),
+        }
+        if role in roles:
+            w.configure(**roles[role])
 
     def toggle_theme(self):
         self.theme_name = "light" if self.theme_name == "dark" else "dark"
@@ -537,6 +792,8 @@ class AutoClickerApp:
         for p in self.pages.values():
             p.pack_forget()
         self.pages[name].pack(fill="both", expand=True)
+        for b, page in ((self.home_btn, "home"), (self.settings_btn, "settings")):
+            b.configure(fg=self.C["accent"] if page == name else self.C["muted"])
 
     def _apply_always_top(self):
         try:
@@ -545,10 +802,10 @@ class AutoClickerApp:
             pass
 
     def _sync_flags(self):
-        self._hold_mode = self.vars["activation"].get() == "hold"
+        self._hold_mode = self.vars["activation"].get() == "Hold"
         self._separate = bool(self.vars["separate_hotkeys"].get())
 
-    # ---- global listener, recording, point picking -------------------- #
+    # ---- listener / recording / picking --------------------------------- #
     def _start_global_listener(self):
         self.listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
         self.listener.daemon = True
@@ -556,11 +813,9 @@ class AutoClickerApp:
 
     def _on_press(self, key):
         if self.recording_target:
-            self._capture_key(key)
-            return
+            self._capture_key(key); return
         if key == self.panic_hotkey:
-            self.root.after(0, self.stop_all)
-            return
+            self.root.after(0, self.stop_all); return
         if key == self.master_hotkey and not self._master_down:
             self._master_down = True
             if self._hold_mode:
@@ -589,61 +844,54 @@ class AutoClickerApp:
     def _capture_key(self, key):
         target = self.recording_target
         self.recording_target = None
-        if target == "spam":
-            self.spam_key = key
-        elif target == "master":
-            self.master_hotkey = key
-        elif target == "panic":
-            self.panic_hotkey = key
-        elif target == "mouse_hk":
-            self.mouse_hotkey = key
-        elif target == "key_hk":
-            self.key_hotkey = key
+        setattr(self, {"spam": "spam_key", "master": "master_hotkey", "panic": "panic_hotkey",
+                       "mouse_hk": "mouse_hotkey", "key_hk": "key_hotkey"}[target], key)
         self.root.after(0, self._refresh_key_labels)
 
     def _start_recording(self, target):
         self.recording_target = target
-        self.status_text.set("Press a key…")
+        self.status_text.set("Press any key…")
         if target == "spam":
             self.key_display.configure(text="…")
 
     def _refresh_key_labels(self):
         self.key_display.configure(text=key_to_label(self.spam_key))
-        for disp, k in [(self.hk_master, self.master_hotkey), (self.hk_panic, self.panic_hotkey),
-                        (self.hk_mouse, self.mouse_hotkey), (self.hk_key, self.key_hotkey)]:
-            disp.configure(text=key_to_label(k))
-        self.status_text.set("Idle" if not (self.mouse_active or self.key_active) else "Running…")
-        self.action_btn.configure(text=f"▶  Start  ({key_to_label(self.master_hotkey)})"
-                                  if not (self.mouse_active or self.key_active)
-                                  else f"■  Stop  ({key_to_label(self.master_hotkey)})")
+        for disp, t in ((self.hk_master, "master"), (self.hk_panic, "panic"),
+                        (self.hk_mouse, "mouse_hk"), (self.hk_key, "key_hk")):
+            disp.configure(text=key_to_label(self._hk_of(t)))
+        self._refresh_running_ui()
 
     def _pick_point(self):
-        self.status_text.set("Click anywhere on screen to capture the point…")
+        self.status_text.set("Click anywhere on screen…")
         mode = self.vars["target_mode"].get()
 
         def on_click(x, y, button, pressed):
             if pressed:
                 self.root.after(0, lambda: self._got_point(x, y, mode))
-                return False  # stop listener after one click
+                return False
         ml = mouse.Listener(on_click=on_click); ml.daemon = True; ml.start()
 
     def _got_point(self, x, y, mode):
         x, y = int(x), int(y)
-        if mode == "Multi-point sequence":
+        if mode == "Multi":
             self.points.append((x, y))
         else:
             self.vars["fixed_x"].set(str(x)); self.vars["fixed_y"].set(str(y))
-            self.points = [(x, y)] if mode == "Fixed point" else self.points
+            self.points = [(x, y)]
         self._refresh_points()
-        self.status_text.set(f"Captured ({x}, {y})")
+        self.status_text.set(f"Saved ({x}, {y})")
+        self.root.after(1200, self._refresh_running_ui)
 
     def _clear_points(self):
         self.points = []; self._refresh_points()
 
     def _refresh_points(self):
-        self.points_lbl.configure(text="  ".join(f"({x},{y})" for x, y in self.points) or "(none)")
+        txt = "  ".join(f"({x},{y})" for x, y in self.points) or "none yet"
+        if len(txt) > 46:
+            txt = f"{len(self.points)} points saved"
+        self.points_lbl.configure(text=txt)
 
-    # ---- numeric helpers ---------------------------------------------- #
+    # ---- numbers -------------------------------------------------------- #
     @staticmethod
     def _num(var, default=0.0):
         try:
@@ -651,16 +899,17 @@ class AutoClickerApp:
         except (ValueError, tk.TclError):
             return default
 
-    def _base_interval(self, hn, mn, sn, msn):
-        return max(self._num(self.vars[hn]) * 3600 + self._num(self.vars[mn]) * 60 +
-                   self._num(self.vars[sn]) + self._num(self.vars[msn]) / 1000.0, 0.0)
+    def _interval_of(self, val_name, unit_name):
+        mult = {"ms": 0.001, "sec": 1.0, "min": 60.0}.get(self.vars[unit_name].get(), 0.001)
+        return max(self._num(self.vars[val_name]) * mult, 0.0)
 
-    # ---- config snapshots (read on main thread) ----------------------- #
+    # ---- config snapshots ------------------------------------------------ #
     def _mouse_cfg(self):
         return dict(
-            button={"Left": Button.left, "Right": Button.right, "Middle": Button.middle}[self.vars["mouse_button"].get()],
+            button={"Left": Button.left, "Right": Button.right,
+                    "Middle": Button.middle}[self.vars["mouse_button"].get()],
             count=2 if self.vars["click_type"].get() == "Double" else 1,
-            base=self._base_interval("click_h", "click_m", "click_s", "click_ms"),
+            base=self._interval_of("click_val", "click_unit"),
             rand=self._num(self.vars["click_rand"]) / 1000.0,
             target_mode=self.vars["target_mode"].get(),
             fixed=(int(self._num(self.vars["fixed_x"])), int(self._num(self.vars["fixed_y"]))),
@@ -680,7 +929,7 @@ class AutoClickerApp:
             mode=self.vars["key_mode"].get(),
             value=self.vars["key_value"].get(),
             single=self.spam_key,
-            base=self._base_interval("key_h", "key_m", "key_s", "key_ms"),
+            base=self._interval_of("key_val_int", "key_unit"),
             rand=self._num(self.vars["key_rand"]) / 1000.0,
             hold_on=bool(self.vars["hold_rand_on"].get()),
             hold_min=self._num(self.vars["hold_min"]) / 1000.0,
@@ -692,23 +941,19 @@ class AutoClickerApp:
                     stop_count=max(int(self._num(self.vars["stop_count"])), 1),
                     stop_time=max(self._num(self.vars["stop_time"]), 0.1))
 
-    # ---- start / stop -------------------------------------------------- #
+    # ---- start / stop ---------------------------------------------------- #
     def master_toggle(self):
-        if self.mouse_active or self.key_active:
-            self.stop_all()
-        else:
-            self.start_all()
+        self.stop_all() if (self.mouse_active or self.key_active) else self.start_all()
 
     def start_all(self, countdown=True):
         want_mouse = bool(self.vars["mouse_enabled"].get())
         want_key = bool(self.vars["key_enabled"].get())
         if not want_mouse and not want_key:
-            self.status_text.set("Enable the mouse or key feature first."); return
+            self.status_text.set("Turn on a feature first")
+            self.root.after(1800, self._refresh_running_ui)
+            return
         cd = int(self._num(self.vars["countdown"])) if countdown else 0
-        if cd > 0:
-            self._countdown(cd, want_mouse, want_key)
-        else:
-            self._begin(want_mouse, want_key)
+        self._countdown(cd, want_mouse, want_key) if cd > 0 else self._begin(want_mouse, want_key)
 
     def _countdown(self, n, want_mouse, want_key):
         if n <= 0:
@@ -722,11 +967,13 @@ class AutoClickerApp:
         self._cps_last_time = time.time()
         if want_mouse and not self.mouse_active:
             self.mouse_active = True
-            self.click_thread = threading.Thread(target=self._click_loop, args=(self._mouse_cfg(),), daemon=True)
+            self.click_thread = threading.Thread(target=self._click_loop,
+                                                 args=(self._mouse_cfg(),), daemon=True)
             self.click_thread.start()
         if want_key and not self.key_active:
             self.key_active = True
-            self.key_thread = threading.Thread(target=self._key_loop, args=(self._key_cfg(),), daemon=True)
+            self.key_thread = threading.Thread(target=self._key_loop,
+                                               args=(self._key_cfg(),), daemon=True)
             self.key_thread.start()
         self._refresh_running_ui()
 
@@ -750,13 +997,17 @@ class AutoClickerApp:
 
     def _refresh_running_ui(self):
         running = self.mouse_active or self.key_active
-        self.action_btn.configure(
-            text=f"{'■  Stop' if running else '▶  Start'}  ({key_to_label(self.master_hotkey)})",
-            bg=self.C["danger"] if running else self.C["accent"],
-            activebackground=self.C["danger"] if running else self.C["accent"])
-        self.status_text.set("Running…" if running else "Idle")
+        hk = key_to_label(self.master_hotkey)
+        self.action_btn.configure(text=f"■   Stop" if running else "▶   Start",
+                                  bg=self.C["danger"] if running else self.C["accent"])
+        self.status_text.set("Running" if running else "Ready")
+        self.cps_lbl.configure(fg=self.C["success"] if running else self.C["muted"])
+        try:
+            self.status_lbl.configure(fg=self.C["success"] if running else self.C["text"])
+        except tk.TclError:
+            pass
 
-    # ---- action primitives -------------------------------------------- #
+    # ---- primitives ------------------------------------------------------ #
     def _sleep(self, seconds, check):
         end = time.time() + max(seconds, 0)
         while check() and time.time() < end:
@@ -769,7 +1020,7 @@ class AutoClickerApp:
         steps = max(int(math.hypot(x - sx, y - sy) / 40), 6)
         for i in range(1, steps + 1):
             t = i / steps
-            ease = t * t * (3 - 2 * t)  # smoothstep
+            ease = t * t * (3 - 2 * t)
             self.mouse_ctl.position = (sx + (x - sx) * ease + random.uniform(-1, 1),
                                        sy + (y - sy) * ease + random.uniform(-1, 1))
             time.sleep(0.005)
@@ -785,20 +1036,19 @@ class AutoClickerApp:
         return max(iv, 0.001)
 
     def _reached_limit(self, cfg, done, start):
-        if cfg["stop_mode"] == "count" and done >= cfg["stop_count"]:
+        if cfg["stop_mode"] == "Count" and done >= cfg["stop_count"]:
             return True
-        if cfg["stop_mode"] == "time" and (time.time() - start) >= cfg["stop_time"]:
+        if cfg["stop_mode"] == "Time" and (time.time() - start) >= cfg["stop_time"]:
             return True
         return False
 
-    # ---- loops (background threads) ----------------------------------- #
+    # ---- loops ----------------------------------------------------------- #
     def _click_loop(self, cfg):
         start = time.time(); done = 0; idx = 0; burst = 0
         while self.mouse_active:
-            # resolve target + optional jitter
-            if cfg["target_mode"] == "Fixed point":
+            if cfg["target_mode"] == "Fixed":
                 tx, ty = cfg["fixed"]; move = True
-            elif cfg["target_mode"] == "Multi-point sequence" and cfg["points"]:
+            elif cfg["target_mode"] == "Multi" and cfg["points"]:
                 tx, ty = cfg["points"][idx % len(cfg["points"])]; idx += 1; move = True
             else:
                 tx, ty = self.mouse_ctl.position; move = cfg["jitter"] > 0
@@ -807,10 +1057,10 @@ class AutoClickerApp:
                 ty += random.randint(-cfg["jitter"], cfg["jitter"])
             if move:
                 self._move_to(tx, ty, cfg["smooth"])
-            # click (respect single/double + hold time)
             hold = self._hold_time(cfg)
             for c in range(cfg["count"]):
-                self.mouse_ctl.press(cfg["button"]); time.sleep(hold); self.mouse_ctl.release(cfg["button"])
+                self.mouse_ctl.press(cfg["button"]); time.sleep(hold)
+                self.mouse_ctl.release(cfg["button"])
                 if c < cfg["count"] - 1:
                     time.sleep(0.03)
             done += 1; self.run_clicks += 1; self.total_clicks += 1
@@ -830,7 +1080,7 @@ class AutoClickerApp:
         combo = parse_combo(cfg["value"]) if cfg["mode"] == "Combo" else None
         while self.key_active:
             try:
-                if cfg["mode"] == "Type text":
+                if cfg["mode"] == "Text":
                     if cfg["value"]:
                         self.kbd_ctl.type(cfg["value"])
                 elif cfg["mode"] == "Sequence":
@@ -838,15 +1088,14 @@ class AutoClickerApp:
                         self._tap(k, cfg); time.sleep(0.01)
                 elif cfg["mode"] == "Combo":
                     for k in (combo or []):
-                        self.kbd_ctl.press(k)
-                        time.sleep(0.005)
+                        self.kbd_ctl.press(k); time.sleep(0.005)
                     for k in reversed(combo or []):
                         self.kbd_ctl.release(k)
-                else:  # Single key
+                else:
                     self._tap(cfg["single"], cfg)
             except Exception:
                 pass
-            done += 1
+            done += 1; self.run_clicks += 1; self.total_clicks += 1
             if self._reached_limit(cfg, done, start):
                 self.root.after(0, self._auto_finished); break
             self._sleep(self._rand_interval(cfg), lambda: self.key_active)
@@ -857,39 +1106,39 @@ class AutoClickerApp:
     def _auto_finished(self):
         if self.mouse_active or self.key_active:
             self.stop_all()
-            self.status_text.set("Finished (limit reached).")
+            self.status_text.set("Finished")
+            self.root.after(2000, self._refresh_running_ui)
 
-    # ---- CPS / stats ticker ------------------------------------------- #
+    # ---- ticker ---------------------------------------------------------- #
     def _tick_cps(self):
         now = time.time(); dt = now - self._cps_last_time
         cps = (self.run_clicks - self._cps_last_count) / dt if dt > 0 else 0
         self._cps_last_count = self.run_clicks; self._cps_last_time = now
-        self.cps_var.set(f"CPS: {cps:4.1f}   •   Total: {self.total_clicks}")
+        self.cps_var.set(f"{cps:.1f} CPS  ·  {self.total_clicks:,} total")
         if hasattr(self, "stat_lbl"):
-            self.stat_lbl.configure(text=f"All-time clicks: {self.total_clicks}")
+            self.stat_lbl.configure(text=f"{self.total_clicks:,}")
         self.root.after(500, self._tick_cps)
 
     def _reset_stats(self):
         self.total_clicks = 0
-        self.cps_var.set("CPS: 0.0   •   Total: 0")
+        self.cps_var.set("0.0 CPS  ·  0 total")
 
-    # ---- profiles / persistence --------------------------------------- #
+    # ---- persistence ------------------------------------------------------ #
     def _collect(self):
-        data = {name: v.get() for name, v in self.vars.items() if name != "status"}
+        data = {n: v.get() for n, v in self.vars.items() if n != "status"}
         data["_points"] = self.points
         data["_total_clicks"] = self.total_clicks
-        data["_keys"] = {
-            "spam": key_to_str(self.spam_key), "master": key_to_str(self.master_hotkey),
-            "panic": key_to_str(self.panic_hotkey), "mouse": key_to_str(self.mouse_hotkey),
-            "key": key_to_str(self.key_hotkey)}
+        data["_keys"] = {"spam": key_to_str(self.spam_key), "master": key_to_str(self.master_hotkey),
+                         "panic": key_to_str(self.panic_hotkey), "mouse": key_to_str(self.mouse_hotkey),
+                         "key": key_to_str(self.key_hotkey)}
         data["_theme"] = self.theme_name
         return data
 
     def _apply(self, data):
-        for name, v in self.vars.items():
-            if name in data:
+        for n, v in self.vars.items():
+            if n in data:
                 try:
-                    v.set(data[name])
+                    v.set(data[n])
                 except tk.TclError:
                     pass
         self.points = [tuple(p) for p in data.get("_points", [])]
@@ -901,9 +1150,12 @@ class AutoClickerApp:
             self.panic_hotkey = key_from_str(ks.get("panic", "k:f9"))
             self.mouse_hotkey = key_from_str(ks.get("mouse", "k:f7"))
             self.key_hotkey = key_from_str(ks.get("key", "k:f8"))
-        self.theme_name = data.get("_theme", self.theme_name); self.C = THEMES[self.theme_name]
+        self.theme_name = data.get("_theme", self.theme_name)
+        self.C = THEMES[self.theme_name]
         self._sync_flags(); self._apply_always_top()
-        self._refresh_points(); self._refresh_key_labels(); self.apply_theme()
+        self._refresh_points(); self._refresh_key_labels()
+        self._refresh_target_ui(); self._refresh_key_ui(); self._refresh_limit_ui()
+        self.apply_theme()
 
     def _load_config(self):
         if os.path.exists(CONFIG_PATH):
@@ -913,6 +1165,7 @@ class AutoClickerApp:
             except Exception:
                 pass
         self._sync_flags()
+        self._refresh_target_ui(); self._refresh_key_ui(); self._refresh_limit_ui()
 
     def _save_config(self):
         try:
@@ -929,7 +1182,8 @@ class AutoClickerApp:
             try:
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump(self._collect(), f, indent=2)
-                self.status_text.set("Profile saved.")
+                self.status_text.set("Profile saved")
+                self.root.after(1600, self._refresh_running_ui)
             except Exception as e:
                 messagebox.showerror(APP_NAME, f"Could not save:\n{e}")
 
@@ -939,7 +1193,8 @@ class AutoClickerApp:
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     self._apply(json.load(f))
-                self.status_text.set("Profile loaded.")
+                self.status_text.set("Profile loaded")
+                self.root.after(1600, self._refresh_running_ui)
             except Exception as e:
                 messagebox.showerror(APP_NAME, f"Could not load:\n{e}")
 
