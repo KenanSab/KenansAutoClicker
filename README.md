@@ -22,20 +22,45 @@ Windows, macOS, and Linux.
 
 ## ✨ Features
 
-- 🖱 **Auto clicker** — left / right / middle button, single or double click,
-  precise interval (hours / minutes / seconds / milliseconds).
-- ⌨ **Auto key presser** — record **any** key and spam it at your chosen speed.
-- 🎯 **Global hotkey** — press **F6** anywhere to start / stop, even when the
-  window isn't focused. Rebindable in Settings.
-- 🔁 **Repeat** — run until stopped, or a fixed number of times.
-- 🏠 **Home + ⚙ Settings pages**, with a 🌗 **light / dark** toggle top-right.
+### 🖱 Auto clicker
+- Left / right / middle button, single or double click
+- Precise interval — hours / minutes / seconds / **milliseconds**
+- **Click targets:** follow the cursor, a **fixed point**, or a **multi-point
+  sequence** — capture any spot with the on-screen **🎯 Pick point** button
+- **Smooth movement** — eased, slightly-wobbly travel to the target
+
+### 🎲 Humanization (looks less robotic)
+- **Jitter** — random pixel offset around every click
+- **Randomized interval** — e.g. `100ms ± 20ms`, so it isn't a dead metronome
+- **Random hold time** — vary how long the button stays down
+- **Burst mode** — fire N clicks, pause, repeat
+
+### ⌨ Auto key presser
+- **Single key** — record any key and spam it
+- **Sequence** — cycle a macro like `q w e r`
+- **Combo** — send `ctrl+shift+a` as one press
+- **Type text** — repeatedly type a whole string
+- Its own independent interval + randomization
+
+### 🎮 Control
+- **Global hotkeys** — **F6** start/stop and **F9** panic-stop, working even when
+  the window isn't focused; all rebindable
+- **Toggle** mode *or* **Hold** mode (runs only while you hold the key)
+- Optional **separate hotkeys** for mouse (F7) and key (F8)
+- **Start countdown**, and **auto-stop** after N actions or N seconds
+
+### 📊 Quality of life
+- Live **CPS counter** + all-time click **stats**
+- **Save / load profiles**, plus auto-save of your last setup
+- **Always on top**, 🏠 Home + ⚙ Settings pages, 🌗 **light / dark** toggle
 
 ## ▶️ Usage
 
 1. Enable **Auto Clicker** and/or **Auto Key Presser** on the Home page.
-2. For key spamming, click **Record key** and press the key you want spammed.
-3. Set the interval.
+2. For keys, pick a **Mode** — record a key, or type a sequence / combo / text.
+3. Set the interval (and any jitter / randomization you want).
 4. Press **F6** (or the Start button) to begin, **F6** again to stop.
+   **F9** is the panic key — it stops everything instantly.
 
 ## 🛠 Run from source
 
