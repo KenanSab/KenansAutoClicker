@@ -199,6 +199,128 @@ class Toggle(tk.Canvas):
         self.redraw()
 
 
+class IconButton(tk.Canvas):
+    """Vector-drawn icon. No fonts or emoji, so it looks identical on every OS."""
+
+    def __init__(self, parent, kind, command, size=30):
+        super().__init__(parent, width=size, height=size, highlightthickness=0,
+                         bd=0, cursor="hand2")
+        self.kind = kind          # 'home' | 'settings' | 'theme'
+        self.command = command
+        self.size = size
+        self.active = False
+        self.theme_is_dark = True
+        self.C = THEMES["dark"]
+        self.bind("<Button-1>", lambda _e: command())
+        self.bind("<Enter>", lambda _e: self.draw(hover=True))
+        self.bind("<Leave>", lambda _e: self.draw())
+
+    def draw(self, hover=False):
+        C, s = self.C, self.size
+        self.delete("all")
+        self.configure(bg=self._bg())
+        fg = C["accent"] if self.active else (C["text"] if hover else C["muted"])
+        m = s / 30.0                      # scale factor from a 30px design grid
+
+        def P(*xy):
+            return [v * m for v in xy]
+
+        if self.kind == "home":
+            self.create_line(*P(7, 15, 15, 8, 23, 15), fill=fg, width=1.8,
+                             capstyle="round", joinstyle="round")
+            self.create_line(*P(10, 14, 10, 22, 20, 22, 20, 14), fill=fg, width=1.8,
+                             capstyle="round", joinstyle="round")
+        elif self.kind == "settings":
+            for y, kx in ((10, 18), (15, 12), (20, 19)):
+                self.create_line(*P(8, y, 22, y), fill=fg, width=1.8, capstyle="round")
+                r = 2.6 * m
+                cx, cy = kx * m, y * m
+                self.create_oval(cx - r, cy - r, cx + r, cy + r,
+                                 fill=self._bg(), outline=fg, width=1.8)
+        elif self.kind == "theme":
+            if self.theme_is_dark:        # show a sun (click = go light)
+                r = 4.2 * m
+                c = 15 * m
+                self.create_oval(c - r, c - r, c + r, c + r, outline=fg, width=1.8)
+                for i in range(8):
+                    a = i * math.pi / 4
+                    self.create_line(c + math.cos(a) * 6.6 * m, c + math.sin(a) * 6.6 * m,
+                                     c + math.cos(a) * 9.2 * m, c + math.sin(a) * 9.2 * m,
+                                     fill=fg, width=1.8, capstyle="round")
+            else:                          # show a moon (click = go dark)
+                r = 6.6 * m
+                c = 15 * m
+                self.create_oval(c - r, c - r, c + r, c + r, fill=fg, outline=fg)
+                o = 4.6 * m
+                self.create_oval(c - r + o, c - r - o * 0.7, c + r + o, c + r - o * 0.7,
+                                 fill=self._bg(), outline=self._bg())
+
+    def _bg(self):
+        try:
+            return self.master.cget("bg")
+        except tk.TclError:
+            return self.C["surface"]
+
+    def refresh_theme(self, C, is_dark=None):
+        self.C = C
+        if is_dark is not None:
+            self.theme_is_dark = is_dark
+        self.draw()
+
+
+class Disclosure(tk.Frame):
+    """A collapsible section: a clickable arrow + title revealing `.body`."""
+
+    def __init__(self, parent, text, variable):
+        super().__init__(parent, highlightthickness=0, bd=0)
+        self.var = variable
+        self.C = THEMES["dark"]
+
+        self.header = tk.Frame(self, cursor="hand2")
+        self.header.pack(fill="x")
+        self.arrow = tk.Canvas(self.header, width=14, height=14,
+                               highlightthickness=0, bd=0, cursor="hand2")
+        self.arrow.pack(side="left", padx=(0, 8))
+        self.label = tk.Label(self.header, text=text, font=(UI_FONT, 9, "bold"),
+                              cursor="hand2", anchor="w")
+        self.label.pack(side="left")
+
+        self.body = tk.Frame(self, highlightthickness=0, bd=0)
+
+        for w in (self.header, self.arrow, self.label):
+            w.bind("<Button-1>", self._toggle)
+        self.var.trace_add("write", lambda *_: self.sync())
+
+    def _toggle(self, _e=None):
+        self.var.set(not self.var.get())
+
+    def sync(self):
+        if self.var.get():
+            self.body.pack(fill="x", pady=(8, 0))
+        else:
+            self.body.pack_forget()
+        self.draw()
+
+    def draw(self):
+        C = self.C
+        self.arrow.delete("all")
+        bg = self.header.cget("bg")
+        self.arrow.configure(bg=bg)
+        col = C["muted"]
+        if self.var.get():                     # pointing down
+            self.arrow.create_polygon(3, 5, 11, 5, 7, 10, fill=col, outline=col)
+        else:                                  # pointing right
+            self.arrow.create_polygon(5, 3, 10, 7, 5, 11, fill=col, outline=col)
+
+    def refresh_theme(self, C):
+        self.C = C
+        self.configure(bg=C["surface"])
+        self.header.configure(bg=C["surface"])
+        self.body.configure(bg=C["surface"])
+        self.label.configure(bg=C["surface"], fg=C["muted"])
+        self.draw()
+
+
 class Segmented(tk.Frame):
     """A row of mutually exclusive pill buttons bound to a StringVar."""
 
@@ -311,12 +433,14 @@ class AutoClickerApp:
         self._bv("jitter_on", False); self._sv("jitter_px", "3")
         self._bv("hold_rand_on", False); self._sv("hold_min", "10"); self._sv("hold_max", "40")
         self._bv("burst_on", False); self._sv("burst_n", "10"); self._sv("burst_pause", "1")
+        self._bv("adv_click_open", False)
         # key
         self._bv("key_enabled", False)
         self._sv("key_mode", "Key")
         self._sv("key_value", "")
         self._sv("key_val_int", "100"); self._sv("key_unit", "ms")
         self._sv("key_rand", "0")
+        self._bv("adv_key_open", False)
         # settings
         self._sv("activation", "Toggle")
         self._bv("separate_hotkeys", False)
@@ -352,18 +476,18 @@ class AutoClickerApp:
 
         brand = tk.Frame(self.topbar); brand.pack(side="left", padx=20)
         self._reg(brand, "surface")
-        self.title_lbl = tk.Label(brand, text="⚡  Kenan's AutoClicker",
+        self.title_lbl = tk.Label(brand, text="Kenan's AutoClicker",
                                   font=(UI_FONT, 15, "bold"), anchor="w")
         self.title_lbl.pack(anchor="w"); self._reg(self.title_lbl, "title")
 
         icons = tk.Frame(self.topbar); icons.pack(side="right", padx=16)
         self._reg(icons, "surface")
-        self.theme_btn = self._icon_button(icons, "☾", self.toggle_theme)
-        self.settings_btn = self._icon_button(icons, "⚙", lambda: self.show_page("settings"))
-        self.home_btn = self._icon_button(icons, "⌂", lambda: self.show_page("home"))
-        self.home_btn.pack(side="left", padx=3)
-        self.settings_btn.pack(side="left", padx=3)
-        self.theme_btn.pack(side="left", padx=3)
+        self.home_btn = IconButton(icons, "home", lambda: self.show_page("home"))
+        self.settings_btn = IconButton(icons, "settings", lambda: self.show_page("settings"))
+        self.theme_btn = IconButton(icons, "theme", self.toggle_theme)
+        for b in (self.home_btn, self.settings_btn, self.theme_btn):
+            b.pack(side="left", padx=4)
+            self._custom.append(b)
 
         self.divider = tk.Frame(self.root, height=1); self.divider.pack(fill="x")
         self._reg(self.divider, "border_fill")
@@ -371,7 +495,9 @@ class AutoClickerApp:
         # ---------- pages ----------
         self.container = tk.Frame(self.root); self.container.pack(fill="both", expand=True)
         self._reg(self.container, "bg")
+        self.active_canvas = None
         self.pages = {"home": self._build_home(), "settings": self._build_settings()}
+        self._bind_wheel()
         self.show_page("home")
 
         # ---------- footer ----------
@@ -391,13 +517,14 @@ class AutoClickerApp:
         self.cps_lbl = tk.Label(left, textvariable=self.cps_var, font=(UI_FONT, 9), anchor="w")
         self.cps_lbl.pack(anchor="w", pady=(2, 0)); self._reg(self.cps_lbl, "muted")
 
-        self.action_btn = tk.Label(self.actionbar, text="▶   Start", font=(UI_FONT, 12, "bold"),
-                                   cursor="hand2", padx=32, pady=12)
+        self.action_btn = tk.Label(self.actionbar, text="Start", font=(UI_FONT, 12, "bold"),
+                                   cursor="hand2", padx=38, pady=12)
         self.action_btn.pack(side="right", padx=20)
         self.action_btn.bind("<Button-1>", lambda _e: self.master_toggle())
         self._reg(self.action_btn, "primary")
 
     def _make_scrollable(self, parent):
+        """Wrap `parent` in a scrolling canvas and remember it for wheel routing."""
         canvas = tk.Canvas(parent, highlightthickness=0, bd=0); self._reg(canvas, "bg")
         sb = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview,
                            style="App.Vertical.TScrollbar")
@@ -408,12 +535,34 @@ class AutoClickerApp:
         sb.pack(side="right", fill="y")
         inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda e: canvas.itemconfig(win, width=e.width))
-
-        def _wheel(e):
-            canvas.yview_scroll(int(-1 * (e.delta / 120)) if e.delta else (-1 if e.num == 4 else 1), "units")
-        for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
-            canvas.bind_all(seq, _wheel)
+        parent.canvas = canvas          # show_page() routes the wheel to this
         return inner
+
+    def _bind_wheel(self):
+        """One global wheel handler, dispatched to whichever page is visible.
+
+        Binding per-page would not work: bind_all is global, so a second page's
+        binding replaces the first. Wheel deltas also differ per platform —
+        Windows sends multiples of 120, macOS sends small integers, and X11
+        sends Button-4/5 instead.
+        """
+        def wheel(event):
+            canvas = getattr(self, "active_canvas", None)
+            if canvas is None:
+                return
+            if event.num == 4:
+                step = -3
+            elif event.num == 5:
+                step = 3
+            elif abs(event.delta) >= 120:          # Windows
+                step = int(-event.delta / 120) * 3
+            else:                                   # macOS
+                step = -event.delta
+            if step:
+                canvas.yview_scroll(int(step), "units")
+
+        for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            self.root.bind_all(seq, wheel)
 
     # ---- layout primitives --------------------------------------------- #
     def _card(self, parent, title, toggle_var=None):
@@ -463,6 +612,14 @@ class AutoClickerApp:
         l = tk.Label(parent, text=text.upper(), font=(UI_FONT, 8, "bold"), anchor="w")
         l.pack(anchor="w", pady=(10, 2)); self._reg(l, "faint")
 
+    def _disclosure(self, parent, text, var):
+        """A collapsed section. Returns the body to pack rows into."""
+        d = Disclosure(parent, text, var)
+        d.pack(fill="x", pady=(4, 0))
+        d.sync()
+        self._custom.append(d)
+        return d.body
+
     # ---- HOME ---------------------------------------------------------- #
     def _build_home(self):
         page = tk.Frame(self.container); self._reg(page, "bg")
@@ -475,14 +632,6 @@ class AutoClickerApp:
         self._right_stack(ctrl, [
             self._entry(ctrl, self.vars["click_val"], 6),
             self._unit(ctrl, self.vars["click_unit"])])
-
-        ctrl = self._row(c, "Randomize", "keeps the rhythm human")
-        self._right_stack(ctrl, [
-            self._pm(ctrl),
-            self._entry(ctrl, self.vars["click_rand"], 5),
-            self._unit_label(ctrl, "ms")])
-
-        self._sep(c)
 
         ctrl = self._row(c, "Button")
         self._seg(ctrl, self.vars["mouse_button"], ["Left", "Right", "Middle"]).pack()
@@ -517,20 +666,24 @@ class AutoClickerApp:
             self.points_lbl,
             self._icon_pill(ctrl, "Clear", self._clear_points)])
 
-        ctrl = self._row(c, "Move smoothly", "glide like a real hand")
-        self._toggle(ctrl, self.vars["smooth_move"]).pack(side="right")
-
+        # ---- collapsed by default: humanization & extras ----
         self._sep(c)
-        self._sub(c, "Humanize")
+        adv = self._disclosure(c, "Humanize & advanced", self.vars["adv_click_open"])
 
-        ctrl = self._row(c, "Jitter", "random pixel wobble")
+        ctrl = self._row(adv, "Randomize interval", "keeps the rhythm human")
+        self._right_stack(ctrl, [
+            self._pm(ctrl),
+            self._entry(ctrl, self.vars["click_rand"], 5),
+            self._unit_label(ctrl, "ms")])
+
+        ctrl = self._row(adv, "Jitter", "random pixel wobble")
         self._right_stack(ctrl, [
             self._pm(ctrl),
             self._entry(ctrl, self.vars["jitter_px"], 4),
             self._unit_label(ctrl, "px"),
             self._toggle(ctrl, self.vars["jitter_on"])])
 
-        ctrl = self._row(c, "Random hold", "vary how long it presses")
+        ctrl = self._row(adv, "Random hold", "vary how long it presses")
         self._right_stack(ctrl, [
             self._entry(ctrl, self.vars["hold_min"], 4),
             self._unit_label(ctrl, "–"),
@@ -538,7 +691,10 @@ class AutoClickerApp:
             self._unit_label(ctrl, "ms"),
             self._toggle(ctrl, self.vars["hold_rand_on"])])
 
-        ctrl = self._row(c, "Burst", "click a batch, then rest")
+        ctrl = self._row(adv, "Move smoothly", "glide like a real hand")
+        self._toggle(ctrl, self.vars["smooth_move"]).pack(side="right")
+
+        ctrl = self._row(adv, "Burst", "click a batch, then rest")
         self._right_stack(ctrl, [
             self._entry(ctrl, self.vars["burst_n"], 4),
             self._unit_label(ctrl, "×, rest"),
@@ -550,8 +706,9 @@ class AutoClickerApp:
         k = self._card(body, "Auto Key Presser", self.vars["key_enabled"])
 
         ctrl = self._row(k, "Mode")
+        self.key_mode_row = ctrl.row
         self._seg(ctrl, self.vars["key_mode"], ["Key", "Sequence", "Combo", "Text"],
-                  command=self._refresh_key_ui).pack()
+                  command=self._refresh_key_ui).pack(side="right")
 
         ctrl = self._row(k, "Key")
         self.key_row = ctrl.row
@@ -576,7 +733,8 @@ class AutoClickerApp:
             self._entry(ctrl, self.vars["key_val_int"], 6),
             self._unit(ctrl, self.vars["key_unit"])])
 
-        ctrl = self._row(k, "Randomize")
+        adv_k = self._disclosure(k, "Advanced", self.vars["adv_key_open"])
+        ctrl = self._row(adv_k, "Randomize interval", "keeps the rhythm human")
         self._right_stack(ctrl, [
             self._pm(ctrl),
             self._entry(ctrl, self.vars["key_rand"], 5),
@@ -690,12 +848,6 @@ class AutoClickerApp:
         b.bind("<Button-1>", lambda _e: command())
         self._reg(b, "soft"); return b
 
-    def _icon_button(self, parent, glyph, command):
-        b = tk.Label(parent, text=glyph, font=(UI_FONT, 14), cursor="hand2",
-                     width=2, padx=6, pady=5)
-        b.bind("<Button-1>", lambda _e: command())
-        self._reg(b, "icon"); return b
-
     # ---- conditional UI ------------------------------------------------- #
     def _refresh_target_ui(self):
         """Show the position controls that match the chosen target, in place."""
@@ -715,12 +867,14 @@ class AutoClickerApp:
                  "Text": "any words, typed out each time"}
         self.key_row.pack_forget()
         self.keyval_row.pack_forget()
+        self.keyval_hint.pack_forget()
+        # pack right below Mode, not at the end of the card
         if mode == "Key":
-            self.key_row.pack(fill="x", pady=5)
-            self.keyval_hint.configure(text="")
+            self.key_row.pack(fill="x", pady=5, after=self.key_mode_row)
         else:
-            self.keyval_row.pack(fill="x", pady=5)
+            self.keyval_row.pack(fill="x", pady=5, after=self.key_mode_row)
             self.keyval_hint.configure(text=hints.get(mode, ""))
+            self.keyval_hint.pack(anchor="w", after=self.keyval_row)
 
     def _refresh_limit_ui(self):
         mode = self.vars["stop_mode"].get()
@@ -748,7 +902,10 @@ class AutoClickerApp:
                 pass
         for w in self._custom:
             try:
-                w.refresh_theme(C)
+                if isinstance(w, IconButton):
+                    w.refresh_theme(C, is_dark=(self.theme_name == "dark"))
+                else:
+                    w.refresh_theme(C)
             except tk.TclError:
                 pass
         # a flat, arrow-less scrollbar that blends into the page
@@ -758,7 +915,6 @@ class AutoClickerApp:
                              relief="flat", borderwidth=0, arrowsize=0, width=8)
         self.style.map("App.Vertical.TScrollbar",
                        background=[("active", C["faint"]), ("!active", C["track"])])
-        self.theme_btn.configure(text="☀" if self.theme_name == "dark" else "☾")
         self._refresh_running_ui()
 
     def _apply_role(self, w, role, C):
@@ -791,9 +947,12 @@ class AutoClickerApp:
     def show_page(self, name):
         for p in self.pages.values():
             p.pack_forget()
-        self.pages[name].pack(fill="both", expand=True)
-        for b, page in ((self.home_btn, "home"), (self.settings_btn, "settings")):
-            b.configure(fg=self.C["accent"] if page == name else self.C["muted"])
+        page = self.pages[name]
+        page.pack(fill="both", expand=True)
+        self.active_canvas = getattr(page, "canvas", None)
+        for b, which in ((self.home_btn, "home"), (self.settings_btn, "settings")):
+            b.active = (which == name)
+            b.draw()
 
     def _apply_always_top(self):
         try:
@@ -997,8 +1156,7 @@ class AutoClickerApp:
 
     def _refresh_running_ui(self):
         running = self.mouse_active or self.key_active
-        hk = key_to_label(self.master_hotkey)
-        self.action_btn.configure(text=f"■   Stop" if running else "▶   Start",
+        self.action_btn.configure(text="Stop" if running else "Start",
                                   bg=self.C["danger"] if running else self.C["accent"])
         self.status_text.set("Running" if running else "Ready")
         self.cps_lbl.configure(fg=self.C["success"] if running else self.C["muted"])
