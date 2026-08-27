@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "name": "Idle Game Clicker",
+  "category": "Gaming",
+  "author": "KenanSab",
+  "description": "Steady 50ms clicking with slight randomisation, for single-player idle and incremental games.",
+  "tags": [
+    "gaming",
+    "idle",
+    "single-player"
+  ],
+  "settings": {
+    "mouse_enabled": true,
+    "click_val": "50",
+    "click_unit": "ms",
+    "click_rand": "15",
+    "mouse_button": "Left",
+    "click_type": "Single",
+    "target_mode": "Cursor",
+    "key_enabled": false,
+    "stop_mode": "Never"
+  }
+}

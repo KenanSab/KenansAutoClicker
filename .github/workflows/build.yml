@@ -17,9 +17,30 @@ permissions:
 
 jobs:
   # ----------------------------------------------------------------- #
+  #  TESTS  ->  must pass before anything is built
+  # ----------------------------------------------------------------- #
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk xvfb
+          pip install pynput pytest
+
+      - name: Run tests
+        run: xvfb-run -a python -m pytest tests/ -q
+  # ----------------------------------------------------------------- #
   #  WINDOWS  ->  KenansAutoClicker.exe
   # ----------------------------------------------------------------- #
   windows:
+    needs: test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,6 +71,7 @@ jobs:
   #  macOS  ->  KenansAutoClicker (app bundle, zipped)
   # ----------------------------------------------------------------- #
   macos:
+    needs: test
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4

@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "name": "Slow Double-Click Assist",
+  "category": "Accessibility",
+  "author": "KenanSab",
+  "description": "Double-clicks once every three seconds for users who cannot double-click quickly enough for the OS to register it.",
+  "tags": [
+    "accessibility",
+    "assistive",
+    "double-click"
+  ],
+  "settings": {
+    "mouse_enabled": true,
+    "click_val": "3",
+    "click_unit": "sec",
+    "mouse_button": "Left",
+    "click_type": "Double",
+    "target_mode": "Cursor",
+    "key_enabled": false,
+    "stop_mode": "Never"
+  }
+}

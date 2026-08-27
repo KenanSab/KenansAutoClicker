@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "note": "Community preset library for Kenan's AutoClicker. Add yours with a pull request - see CONTRIBUTING.md.",
+  "presets": [
+    {
+      "schema": 1,
+      "name": "Spreadsheet Row Entry",
+      "category": "Productivity",
+      "author": "KenanSab",
+      "description": "Types a value then moves down a row: Enter every second. Pair it with a clipboard tool for bulk data entry.",
+      "tags": [
+        "productivity",
+        "spreadsheet",
+        "data-entry"
+      ],
+      "settings": {
+        "mouse_enabled": false,
+        "key_enabled": true,
+        "key_mode": "Sequence",
+        "key_value": "enter",
+        "key_val_int": "1",
+        "key_unit": "sec",
+        "stop_mode": "Never"
+      }
+    },
+    {
+      "schema": 1,
+      "name": "Slow Double-Click Assist",
+      "category": "Accessibility",
+      "author": "KenanSab",
+      "description": "Double-clicks once every three seconds for users who cannot double-click quickly enough for the OS to register it.",
+      "tags": [
+        "accessibility",
+        "assistive",
+        "double-click"
+      ],
+      "settings": {
+        "mouse_enabled": true,
+        "click_val": "3",
+        "click_unit": "sec",
+        "mouse_button": "Left",
+        "click_type": "Double",
+        "target_mode": "Cursor",
+        "key_enabled": false,
+        "stop_mode": "Never"
+      }
+    },
+    {
+      "schema": 1,
+      "name": "Idle Game Clicker",
+      "category": "Gaming",
+      "author": "KenanSab",
+      "description": "Steady 50ms clicking with slight randomisation, for single-player idle and incremental games.",
+      "tags": [
+        "gaming",
+        "idle",
+        "single-player"
+      ],
+      "settings": {
+        "mouse_enabled": true,
+        "click_val": "50",
+        "click_unit": "ms",
+        "click_rand": "15",
+        "mouse_button": "Left",
+        "click_type": "Single",
+        "target_mode": "Cursor",
+        "key_enabled": false,
+        "stop_mode": "Never"
+      }
+    }
+  ]
+}
