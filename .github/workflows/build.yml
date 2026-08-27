@@ -1,10 +1,13 @@
 name: Build Kenan's AutoClicker
 
-# Builds a real Windows .exe (and a macOS binary) in the cloud.
-# - Every push to main: uploads the builds as downloadable "Artifacts"
-#   (Actions tab -> latest run -> Artifacts).
-# - Every tag like v1.0.0: also publishes a GitHub Release with the
-#   files attached, so people can download them from the Releases page.
+# Tests, builds and publishes automatically.
+#
+#   push to main   ->  run tests, build Windows + macOS, and refresh the
+#                      rolling "latest" release so there is always a working
+#                      download without having to tag anything
+#   push a v* tag  ->  the same, plus a permanent versioned release
+#
+# Nothing is built unless the test suite passes first.
 
 on:
   push:
@@ -36,6 +39,7 @@ jobs:
 
       - name: Run tests
         run: xvfb-run -a python -m pytest tests/ -q
+
   # ----------------------------------------------------------------- #
   #  WINDOWS  ->  KenansAutoClicker.exe
   # ----------------------------------------------------------------- #
@@ -60,12 +64,6 @@ jobs:
         with:
           name: KenansAutoClicker-Windows
           path: dist/KenansAutoClicker.exe
-
-      - name: Attach EXE to Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/KenansAutoClicker.exe
 
   # ----------------------------------------------------------------- #
   #  macOS  ->  KenansAutoClicker (app bundle, zipped)
@@ -97,8 +95,63 @@ jobs:
           name: KenansAutoClicker-macOS
           path: dist/KenansAutoClicker-macOS.zip
 
-      - name: Attach macOS build to Release
+  # ----------------------------------------------------------------- #
+  #  RELEASE  ->  publishes the builds so people can actually download them
+  # ----------------------------------------------------------------- #
+  release:
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download built binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect them into one folder
+        run: |
+          mkdir -p out
+          find artifacts -type f \( -name '*.exe' -o -name '*.zip' \) -exec cp {} out/ \;
+          ls -lh out
+
+      - name: Read the version
+        id: ver
+        run: |
+          V=$(grep -oP '(?<=__version__ = ")[^"]+' kenansautoclicker/__init__.py)
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Version is $V"
+
+      # --- every push to main: refresh a rolling pre-release ---------------
+      - name: Update the rolling "latest" release
+        if: startsWith(github.ref, 'refs/heads/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Latest build (v${{ steps.ver.outputs.version }})"
+          prerelease: true
+          body: |
+            Automatically built from the newest commit on `main`.
+
+            **Version:** `v${{ steps.ver.outputs.version }}`
+            **Commit:** ${{ github.sha }}
+
+            | Platform | File |
+            |---|---|
+            | Windows | `KenansAutoClicker.exe` |
+            | macOS | `KenansAutoClicker-macOS.zip` |
+
+            Windows will warn that the app is unsigned — click
+            **More info → Run anyway**. On macOS, right-click → **Open** the
+            first time, then allow it under Privacy & Security → Accessibility.
+
+            For a stable version, see the tagged releases below.
+          files: out/*
+
+      # --- a v* tag: publish a permanent versioned release -----------------
+      - name: Publish the tagged release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/KenansAutoClicker-macOS.zip
+          generate_release_notes: true
+          files: out/*

@@ -199,6 +199,18 @@ python -m pytest tests/ -q
 parsing, persistence, and interface behaviour. CI runs them on every push, and
 nothing is built unless they pass.
 
+## Shipping a change
+
+```bash
+./ship.sh "what changed"                 # test, commit, push
+./ship.sh "what changed" --release 2.1.0 # ...and cut a versioned release
+./ship.sh --dry                          # just run the tests
+```
+
+The script refuses to commit or push if the tests fail. Once pushed, GitHub
+builds both platforms and refreshes the rolling **latest** download on its own —
+tagging is only needed for a permanent versioned release.
+
 ---
 
 ## How it's built
