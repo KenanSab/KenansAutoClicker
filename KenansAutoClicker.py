@@ -52,6 +52,7 @@ APP_NAME = "Kenan's AutoClicker"
 CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".kenans_autoclicker.json")
 
 UI_FONT = "Segoe UI"          # falls back gracefully on macOS / Linux
+TOUCHPAD_SPEED = 6            # pixels per unit of precision-trackpad delta
 
 
 # --------------------------------------------------------------------------- #
@@ -743,16 +744,38 @@ class AutoClickerApp:
         parent.canvas = canvas          # show_page() routes the wheel to this
         return inner
 
-    def _bind_wheel(self):
-        """One global wheel handler, dispatched to whichever page is visible.
+    def _scroll_pixels(self, canvas, dy):
+        """Scroll by an exact pixel amount, clamped to the content."""
+        box = canvas.bbox("all")
+        if not box:
+            return
+        total = box[3] - box[1]
+        view = canvas.winfo_height()
+        if total <= view:
+            return                       # nothing to scroll
+        top = canvas.yview()[0] * total + dy
+        top = max(0.0, min(float(total - view), top))
+        canvas.yview_moveto(top / total)
 
-        Binding per-page would not work: bind_all is global, so a second page's
-        binding replaces the first. Wheel deltas also differ per platform —
-        Windows sends multiples of 120, macOS sends small integers, and X11
-        sends Button-4/5 instead.
+    def _bind_wheel(self):
+        """Route every kind of scroll input to whichever page is visible.
+
+        Three separate things have to be handled:
+          * <MouseWheel>     — a real wheel. Windows sends multiples of 120,
+                               macOS sends small integers.
+          * <Button-4/5>     — how X11 reports a wheel.
+          * <TouchpadScroll> — what Tk 8.7+ on macOS sends for a precision
+                               trackpad. It does NOT also send <MouseWheel>,
+                               so binding only the above leaves every MacBook
+                               unable to scroll.
+        bind_all is global, so there is one handler routed via active_canvas
+        rather than one binding per page (a second page would replace the first).
         """
+        def canvas_now():
+            return getattr(self, "active_canvas", None)
+
         def wheel(event):
-            canvas = getattr(self, "active_canvas", None)
+            canvas = canvas_now()
             if canvas is None:
                 return
             num = getattr(event, "num", 0)
@@ -762,7 +785,6 @@ class AutoClickerApp:
             elif num == 5:
                 step = 3
             elif delta:
-                # Windows sends multiples of 120; macOS sends small numbers.
                 step = (-delta / 120 * 3) if abs(delta) >= 120 else (-delta * 3)
             else:
                 return
@@ -771,8 +793,25 @@ class AutoClickerApp:
                 step = -1 if (delta or -num) > 0 else 1
             canvas.yview_scroll(step, "units")
 
+        def touchpad(event):
+            canvas = canvas_now()
+            if canvas is None:
+                return
+            # Tk packs both axes into one int; its own helper unpacks them.
+            try:
+                dx, dy = self.root.tk.call("::tk::PreciseScrollDeltas", event.delta)
+                dy = int(dy)
+            except (tk.TclError, ValueError, TypeError):
+                return
+            if dy:
+                self._scroll_pixels(canvas, -dy * TOUCHPAD_SPEED)
+
         for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
             self.root.bind_all(seq, wheel)
+        try:
+            self.root.bind_all("<TouchpadScroll>", touchpad)
+        except tk.TclError:
+            pass                         # older Tk: wheel bindings cover it
 
     # ---- layout primitives --------------------------------------------- #
     def _card(self, parent, title, toggle_var=None):
