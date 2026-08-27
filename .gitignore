@@ -19,3 +19,6 @@ Thumbs.db
 
 # pytest
 .pytest_cache/
+
+# packaging
+*.egg-info/

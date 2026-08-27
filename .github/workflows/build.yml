@@ -128,10 +128,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "Latest build (v${{ steps.ver.outputs.version }})"
+          name: "Development build (v${{ steps.ver.outputs.version }})"
           prerelease: true
           body: |
-            Automatically built from the newest commit on `main`.
+            Rolling build from the newest commit on `main`. For a stable
+            download, use the latest **tagged release** instead.
 
             **Version:** `v${{ steps.ver.outputs.version }}`
             **Commit:** ${{ github.sha }}
@@ -154,4 +155,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          make_latest: true          # this is the one people should download
           files: out/*
