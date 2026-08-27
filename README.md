@@ -85,6 +85,10 @@ python KenansAutoClicker.py
 
 Python · tkinter · [pynput](https://pypi.org/project/pynput/)
 
+Icons are [Lucide](https://lucide.dev) (ISC License), drawn straight from their
+SVG path data onto a canvas — so they stay crisp, follow the theme, and need no
+image library.
+
 ---
 
 © 2026 Kenan — MIT License. Use responsibly, only where automated input is allowed.

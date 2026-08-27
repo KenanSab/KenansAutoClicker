@@ -34,6 +34,7 @@ import json
 import math
 import os
 import random
+import re
 import threading
 import time
 import tkinter as tk
@@ -199,10 +200,227 @@ class Toggle(tk.Canvas):
         self.redraw()
 
 
-class IconButton(tk.Canvas):
-    """Vector-drawn icon. No fonts or emoji, so it looks identical on every OS."""
+# --------------------------------------------------------------------------- #
+#  Icons — Lucide (https://lucide.dev), ISC License, Copyright (c) Lucide
+#  Contributors. The strings below are Lucide's own 24x24 path data, drawn onto
+#  a tk.Canvas by the tiny renderer beneath them. Doing it this way keeps the
+#  icons crisp at any size, lets them take the theme colour, and avoids pulling
+#  in an image library just to show six glyphs.
+# --------------------------------------------------------------------------- #
+LUCIDE = {
+    "house": [
+        "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8",
+        "M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 "
+        "2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
+    ],
+    "settings": [
+        "M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 "
+        "0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 "
+        "2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 "
+        "2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 "
+        "6.051a2.34 2.34 0 0 0 3.319-1.915",
+        "circle:12,12,3",
+    ],
+    "sun": [
+        "circle:12,12,4",
+        "M12 2v2", "M12 20v2", "m4.93 4.93 1.41 1.41", "m17.66 17.66 1.41 1.41",
+        "M2 12h2", "M20 12h2", "m6.34 17.66-1.41 1.41", "m19.07 4.93-1.41 1.41",
+    ],
+    "moon": [
+        "M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 "
+        "8.268 8.268c.344-.215.825-.004.803.401",
+    ],
+    "chevron-right": ["m9 18 6-6-6-6"],
+    "chevron-down": ["m6 9 6 6 6-6"],
+    "crosshair": [
+        "circle:12,12,10",
+        "line:22,12,18,12", "line:6,12,2,12", "line:12,6,12,2", "line:12,22,12,18",
+    ],
+}
 
-    def __init__(self, parent, kind, command, size=30):
+_PATH_TOKENS = re.compile(r"([MmLlHhVvCcSsQqTtAaZz])|(-?\d*\.?\d+(?:[eE][-+]?\d+)?)")
+
+
+def _cubic(p0, p1, p2, p3, steps=14):
+    pts = []
+    for i in range(1, steps + 1):
+        t = i / steps
+        u = 1 - t
+        pts.append((u * u * u * p0[0] + 3 * u * u * t * p1[0]
+                    + 3 * u * t * t * p2[0] + t * t * t * p3[0],
+                    u * u * u * p0[1] + 3 * u * u * t * p1[1]
+                    + 3 * u * t * t * p2[1] + t * t * t * p3[1]))
+    return pts
+
+
+def _arc(x1, y1, rx, ry, phi_deg, large, sweep, x2, y2, steps=18):
+    """SVG elliptical arc -> points (endpoint to centre parameterisation, F.6.5)."""
+    if rx == 0 or ry == 0 or (x1 == x2 and y1 == y2):
+        return [(x2, y2)]
+    phi = math.radians(phi_deg)
+    cp, sp = math.cos(phi), math.sin(phi)
+    dx, dy = (x1 - x2) / 2.0, (y1 - y2) / 2.0
+    x1p, y1p = cp * dx + sp * dy, -sp * dx + cp * dy
+    rx, ry = abs(rx), abs(ry)
+    lam = (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry)
+    if lam > 1:
+        s = math.sqrt(lam)
+        rx, ry = rx * s, ry * s
+    num = rx * rx * ry * ry - rx * rx * y1p * y1p - ry * ry * x1p * x1p
+    den = rx * rx * y1p * y1p + ry * ry * x1p * x1p
+    co = math.sqrt(max(num / den, 0.0)) if den else 0.0
+    if large == sweep:
+        co = -co
+    cxp, cyp = co * rx * y1p / ry, -co * ry * x1p / rx
+    cx = cp * cxp - sp * cyp + (x1 + x2) / 2.0
+    cy = sp * cxp + cp * cyp + (y1 + y2) / 2.0
+
+    def ang(ux, uy, vx, vy):
+        d = math.hypot(ux, uy) * math.hypot(vx, vy)
+        if d == 0:
+            return 0.0
+        a = math.acos(max(-1.0, min(1.0, (ux * vx + uy * vy) / d)))
+        return -a if (ux * vy - uy * vx) < 0 else a
+
+    ux, uy = (x1p - cxp) / rx, (y1p - cyp) / ry
+    vx, vy = (-x1p - cxp) / rx, (-y1p - cyp) / ry
+    th1 = ang(1, 0, ux, uy)
+    dth = ang(ux, uy, vx, vy)
+    if not sweep and dth > 0:
+        dth -= 2 * math.pi
+    elif sweep and dth < 0:
+        dth += 2 * math.pi
+    pts = []
+    for i in range(1, steps + 1):
+        t = th1 + dth * i / steps
+        ct, st = math.cos(t), math.sin(t)
+        pts.append((cx + rx * ct * cp - ry * st * sp,
+                    cy + rx * ct * sp + ry * st * cp))
+    return pts
+
+
+def parse_svg_path(d):
+    """Flatten an SVG path string into a list of polylines."""
+    toks = [(c, n) for c, n in _PATH_TOKENS.findall(d)]
+    i = 0
+    cmd = None
+    cur = (0.0, 0.0)
+    start = (0.0, 0.0)
+    prev_c2 = None
+    lines = []
+    poly = []
+
+    def nums(k):
+        nonlocal i
+        out = []
+        while len(out) < k and i < len(toks) and toks[i][0] == "":
+            out.append(float(toks[i][1]))
+            i += 1
+        return out
+
+    while i < len(toks):
+        if toks[i][0]:
+            cmd = toks[i][0]
+            i += 1
+        rel = cmd.islower()
+        c = cmd.upper()
+
+        if c == "M":
+            v = nums(2)
+            if len(v) < 2:
+                break
+            cur = (cur[0] + v[0], cur[1] + v[1]) if rel else (v[0], v[1])
+            if len(poly) > 1:
+                lines.append(poly)
+            poly = [cur]
+            start = cur
+            cmd = "l" if rel else "L"        # subsequent pairs are implicit lineto
+        elif c in "LHV":
+            if c == "L":
+                v = nums(2)
+                if len(v) < 2:
+                    break
+                cur = (cur[0] + v[0], cur[1] + v[1]) if rel else (v[0], v[1])
+            elif c == "H":
+                v = nums(1)
+                if not v:
+                    break
+                cur = (cur[0] + v[0], cur[1]) if rel else (v[0], cur[1])
+            else:
+                v = nums(1)
+                if not v:
+                    break
+                cur = (cur[0], cur[1] + v[0]) if rel else (cur[0], v[0])
+            poly.append(cur)
+        elif c in "CS":
+            if c == "C":
+                v = nums(6)
+                if len(v) < 6:
+                    break
+                p1 = (cur[0] + v[0], cur[1] + v[1]) if rel else (v[0], v[1])
+                p2 = (cur[0] + v[2], cur[1] + v[3]) if rel else (v[2], v[3])
+                p3 = (cur[0] + v[4], cur[1] + v[5]) if rel else (v[4], v[5])
+            else:
+                v = nums(4)
+                if len(v) < 4:
+                    break
+                p1 = (2 * cur[0] - prev_c2[0], 2 * cur[1] - prev_c2[1]) if prev_c2 else cur
+                p2 = (cur[0] + v[0], cur[1] + v[1]) if rel else (v[0], v[1])
+                p3 = (cur[0] + v[2], cur[1] + v[3]) if rel else (v[2], v[3])
+            poly.extend(_cubic(cur, p1, p2, p3))
+            prev_c2, cur = p2, p3
+            continue
+        elif c == "A":
+            v = nums(7)
+            if len(v) < 7:
+                break
+            end = (cur[0] + v[5], cur[1] + v[6]) if rel else (v[5], v[6])
+            poly.extend(_arc(cur[0], cur[1], v[0], v[1], v[2],
+                             int(v[3]), int(v[4]), end[0], end[1]))
+            cur = end
+        elif c == "Z":
+            if poly:
+                poly.append(start)
+                lines.append(poly)
+                poly = [start]
+            cur = start
+        else:
+            i += 1
+            continue
+        if c != "C" and c != "S":
+            prev_c2 = None
+
+    if len(poly) > 1:
+        lines.append(poly)
+    return lines
+
+
+def draw_icon(canvas, name, size, color, stroke=2.0):
+    """Render a Lucide icon onto `canvas`, scaled from its 24x24 grid."""
+    k = size / 24.0
+    w = max(stroke * k, 1.0)
+    for shape in LUCIDE.get(name, []):
+        if shape.startswith("circle:"):
+            cx, cy, r = (float(v) for v in shape[7:].split(","))
+            canvas.create_oval((cx - r) * k, (cy - r) * k, (cx + r) * k, (cy + r) * k,
+                               outline=color, width=w)
+        elif shape.startswith("line:"):
+            x1, y1, x2, y2 = (float(v) for v in shape[5:].split(","))
+            canvas.create_line(x1 * k, y1 * k, x2 * k, y2 * k,
+                               fill=color, width=w, capstyle="round")
+        else:
+            for poly in parse_svg_path(shape):
+                if len(poly) > 1:
+                    flat = [v * k for pt in poly for v in pt]
+                    canvas.create_line(*flat, fill=color, width=w,
+                                       capstyle="round", joinstyle="round",
+                                       smooth=False)
+
+
+class IconButton(tk.Canvas):
+    """A clickable Lucide icon that follows the theme."""
+
+    def __init__(self, parent, kind, command, size=34):
         super().__init__(parent, width=size, height=size, highlightthickness=0,
                          bd=0, cursor="hand2")
         self.kind = kind          # 'home' | 'settings' | 'theme'
@@ -216,44 +434,33 @@ class IconButton(tk.Canvas):
         self.bind("<Leave>", lambda _e: self.draw())
 
     def draw(self, hover=False):
-        C, s = self.C, self.size
+        C = self.C
         self.delete("all")
         self.configure(bg=self._bg())
         fg = C["accent"] if self.active else (C["text"] if hover else C["muted"])
-        m = s / 30.0                      # scale factor from a 30px design grid
+        name = {"home": "house", "settings": "settings"}.get(
+            self.kind, "sun" if self.theme_is_dark else "moon")
+        glyph = self.size * 0.62
+        self._offset_draw(name, glyph, (self.size - glyph) / 2, fg)
 
-        def P(*xy):
-            return [v * m for v in xy]
-
-        if self.kind == "home":
-            self.create_line(*P(7, 15, 15, 8, 23, 15), fill=fg, width=1.8,
-                             capstyle="round", joinstyle="round")
-            self.create_line(*P(10, 14, 10, 22, 20, 22, 20, 14), fill=fg, width=1.8,
-                             capstyle="round", joinstyle="round")
-        elif self.kind == "settings":
-            for y, kx in ((10, 18), (15, 12), (20, 19)):
-                self.create_line(*P(8, y, 22, y), fill=fg, width=1.8, capstyle="round")
-                r = 2.6 * m
-                cx, cy = kx * m, y * m
-                self.create_oval(cx - r, cy - r, cx + r, cy + r,
-                                 fill=self._bg(), outline=fg, width=1.8)
-        elif self.kind == "theme":
-            if self.theme_is_dark:        # show a sun (click = go light)
-                r = 4.2 * m
-                c = 15 * m
-                self.create_oval(c - r, c - r, c + r, c + r, outline=fg, width=1.8)
-                for i in range(8):
-                    a = i * math.pi / 4
-                    self.create_line(c + math.cos(a) * 6.6 * m, c + math.sin(a) * 6.6 * m,
-                                     c + math.cos(a) * 9.2 * m, c + math.sin(a) * 9.2 * m,
-                                     fill=fg, width=1.8, capstyle="round")
-            else:                          # show a moon (click = go dark)
-                r = 6.6 * m
-                c = 15 * m
-                self.create_oval(c - r, c - r, c + r, c + r, fill=fg, outline=fg)
-                o = 4.6 * m
-                self.create_oval(c - r + o, c - r - o * 0.7, c + r + o, c + r - o * 0.7,
-                                 fill=self._bg(), outline=self._bg())
+    def _offset_draw(self, name, glyph, pad, fg):
+        k = glyph / 24.0
+        for shape in LUCIDE.get(name, []):
+            if shape.startswith("circle:"):
+                cx, cy, r = (float(v) for v in shape[7:].split(","))
+                self.create_oval(pad + (cx - r) * k, pad + (cy - r) * k,
+                                 pad + (cx + r) * k, pad + (cy + r) * k,
+                                 outline=fg, width=max(2.0 * k, 1.0))
+            elif shape.startswith("line:"):
+                x1, y1, x2, y2 = (float(v) for v in shape[5:].split(","))
+                self.create_line(pad + x1 * k, pad + y1 * k, pad + x2 * k, pad + y2 * k,
+                                 fill=fg, width=max(2.0 * k, 1.0), capstyle="round")
+            else:
+                for poly in parse_svg_path(shape):
+                    if len(poly) > 1:
+                        flat = [pad + v * k for pt in poly for v in pt]
+                        self.create_line(*flat, fill=fg, width=max(2.0 * k, 1.0),
+                                         capstyle="round", joinstyle="round")
 
     def _bg(self):
         try:
@@ -302,15 +509,10 @@ class Disclosure(tk.Frame):
         self.draw()
 
     def draw(self):
-        C = self.C
         self.arrow.delete("all")
-        bg = self.header.cget("bg")
-        self.arrow.configure(bg=bg)
-        col = C["muted"]
-        if self.var.get():                     # pointing down
-            self.arrow.create_polygon(3, 5, 11, 5, 7, 10, fill=col, outline=col)
-        else:                                  # pointing right
-            self.arrow.create_polygon(5, 3, 10, 7, 5, 11, fill=col, outline=col)
+        self.arrow.configure(bg=self.header.cget("bg"))
+        draw_icon(self.arrow, "chevron-down" if self.var.get() else "chevron-right",
+                  14, self.C["muted"], stroke=2.4)
 
     def refresh_theme(self, C):
         self.C = C
@@ -550,16 +752,21 @@ class AutoClickerApp:
             canvas = getattr(self, "active_canvas", None)
             if canvas is None:
                 return
-            if event.num == 4:
+            num = getattr(event, "num", 0)
+            delta = getattr(event, "delta", 0) or 0
+            if num == 4:
                 step = -3
-            elif event.num == 5:
+            elif num == 5:
                 step = 3
-            elif abs(event.delta) >= 120:          # Windows
-                step = int(-event.delta / 120) * 3
-            else:                                   # macOS
-                step = -event.delta
-            if step:
-                canvas.yview_scroll(int(step), "units")
+            elif delta:
+                # Windows sends multiples of 120; macOS sends small numbers.
+                step = (-delta / 120 * 3) if abs(delta) >= 120 else (-delta * 3)
+            else:
+                return
+            step = int(step)
+            if step == 0:               # never let rounding swallow a scroll
+                step = -1 if (delta or -num) > 0 else 1
+            canvas.yview_scroll(step, "units")
 
         for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
             self.root.bind_all(seq, wheel)
