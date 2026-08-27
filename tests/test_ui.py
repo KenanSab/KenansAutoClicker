@@ -86,14 +86,27 @@ def test_every_page_owns_a_canvas(app):
         assert app.active_canvas is app.pages[name].canvas
 
 
+def _touchpad_supported(root):
+    """Whether this Tk knows the event at all.
+
+    <TouchpadScroll> arrived in Tk 8.7; Ubuntu still ships 8.6, where merely
+    *querying* the binding succeeds but binding or generating it raises. So the
+    probe has to attempt a real bind.
+    """
+    try:
+        root.bind("<TouchpadScroll>", lambda _e: None)
+    except tk.TclError:
+        return False
+    root.unbind("<TouchpadScroll>")
+    return True
+
+
 def test_touchpad_scroll_is_bound(app):
     """Tk 8.7+ on macOS sends <TouchpadScroll> and NOT <MouseWheel> for a
     precision trackpad. Binding only <MouseWheel> shipped once and left every
     MacBook unable to scroll at all."""
-    try:
-        app.root.tk.call("bind", "all", "<TouchpadScroll>")
-    except tk.TclError:
-        pytest.skip("this Tk has no TouchpadScroll")
+    if not _touchpad_supported(app.root):
+        pytest.skip("this Tk predates TouchpadScroll; MouseWheel covers it")
     assert app.root.bind_all("<TouchpadScroll>"), "trackpads cannot scroll"
 
 
@@ -107,10 +120,10 @@ def _pack_delta(dy):
 
 
 def test_touchpad_scroll_moves_both_directions(app):
-    try:
-        app.root.tk.call("info", "procs", "::tk::PreciseScrollDeltas")
-    except tk.TclError:
-        pytest.skip("no PreciseScrollDeltas")
+    if not _touchpad_supported(app.root):
+        pytest.skip("this Tk predates TouchpadScroll")
+    if not app.root.tk.call("info", "procs", "::tk::PreciseScrollDeltas"):
+        pytest.skip("no PreciseScrollDeltas helper")
     app.root.deiconify(); app.root.geometry("600x420")
     app.vars["adv_click_open"].set(True); app.vars["adv_key_open"].set(True)
     app.show_page("home"); app.root.update_idletasks(); app.root.update()
