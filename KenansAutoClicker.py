@@ -650,13 +650,16 @@ class AutoClickerApp:
         self._sv("stop_count", "100"); self._sv("stop_time", "10")
         self._sv("countdown", "0")
         self._bv("always_top", False)
+        self._bv("adv_hotkeys_open", False)
+        self._bv("adv_behav_open", False)
         self.status_text = self._sv("status", "Ready")
 
     # ---- shell --------------------------------------------------------- #
     def _build_ui(self):
         self.root.title(APP_NAME)
-        self.root.geometry("600x760")
-        self.root.minsize(560, 620)
+        # sized for the collapsed default view; expanding a section scrolls
+        self.root.geometry("600x580")
+        self.root.minsize(540, 420)
         self._init_vars()
         self.style = ttk.Style()
         try:
@@ -833,6 +836,8 @@ class AutoClickerApp:
         body = self._make_scrollable(page)
 
         # ============ CLICKER ============
+        # Only the two things every autoclicker needs are visible; everything
+        # else — click type, targeting, coordinates, humanisation — is opt-in.
         c = self._card(body, "Auto Clicker", self.vars["mouse_enabled"])
 
         ctrl = self._row(c, "Interval")
@@ -841,20 +846,22 @@ class AutoClickerApp:
             self._unit(ctrl, self.vars["click_unit"])])
 
         ctrl = self._row(c, "Button")
-        self._seg(ctrl, self.vars["mouse_button"], ["Left", "Right", "Middle"]).pack()
+        self._seg(ctrl, self.vars["mouse_button"], ["Left", "Right", "Middle"]).pack(side="right")
 
-        ctrl = self._row(c, "Click")
-        self._seg(ctrl, self.vars["click_type"], ["Single", "Double"]).pack()
-
+        # ---- everything below is collapsed by default ----
         self._sep(c)
+        adv = self._disclosure(c, "More options", self.vars["adv_click_open"])
 
-        ctrl = self._row(c, "Click at")
+        ctrl = self._row(adv, "Click")
+        self._seg(ctrl, self.vars["click_type"], ["Single", "Double"]).pack(side="right")
+
+        ctrl = self._row(adv, "Click at")
         self.target_row = ctrl.row
         self._seg(ctrl, self.vars["target_mode"], ["Cursor", "Fixed", "Multi"],
-                  command=self._refresh_target_ui).pack()
+                  command=self._refresh_target_ui).pack(side="right")
 
         # --- Fixed point: pick + X/Y (packed under "Click at" on demand) ---
-        ctrl = self._row(c, "Position")
+        ctrl = self._row(adv, "Position")
         self.pos_row = ctrl.row
         self._right_stack(ctrl, [
             self._icon_pill(ctrl, "Pick point", self._pick_point),
@@ -864,7 +871,7 @@ class AutoClickerApp:
             self._unit_label(ctrl, "y")])
 
         # --- Multi point: add to a list ---
-        ctrl = self._row(c, "Points", "clicked in order, looping")
+        ctrl = self._row(adv, "Points", "clicked in order, looping")
         self.points_row = ctrl.row
         self.points_lbl = tk.Label(ctrl, text="none yet", font=(UI_FONT, 9))
         self._reg(self.points_lbl, "muted")
@@ -873,9 +880,7 @@ class AutoClickerApp:
             self.points_lbl,
             self._icon_pill(ctrl, "Clear", self._clear_points)])
 
-        # ---- collapsed by default: humanization & extras ----
-        self._sep(c)
-        adv = self._disclosure(c, "Humanize & advanced", self.vars["adv_click_open"])
+        self._sub(adv, "Humanize")
 
         ctrl = self._row(adv, "Randomize interval", "keeps the rhythm human")
         self._right_stack(ctrl, [
@@ -912,11 +917,7 @@ class AutoClickerApp:
         # ============ KEY ============
         k = self._card(body, "Auto Key Presser", self.vars["key_enabled"])
 
-        ctrl = self._row(k, "Mode")
-        self.key_mode_row = ctrl.row
-        self._seg(ctrl, self.vars["key_mode"], ["Key", "Sequence", "Combo", "Text"],
-                  command=self._refresh_key_ui).pack(side="right")
-
+        # Basic: which key, and how fast. Modes and randomisation are opt-in.
         ctrl = self._row(k, "Key")
         self.key_row = ctrl.row
         self.key_display = tk.Label(ctrl, text=key_to_label(self.spam_key),
@@ -926,21 +927,27 @@ class AutoClickerApp:
             self.key_display,
             self._icon_pill(ctrl, "Record", lambda: self._start_recording("spam"))])
 
-        ctrl = self._row(k, "Value")
-        self.keyval_row = ctrl.row
-        self.keyval_entry = self._entry(ctrl, self.vars["key_value"], 24)
-        self.keyval_entry.pack(side="right")
-        self.keyval_hint = tk.Label(k, text="", font=(UI_FONT, 8), anchor="w")
-        self.keyval_hint.pack(anchor="w"); self._reg(self.keyval_hint, "faint")
-
-        self._sep(k)
-
         ctrl = self._row(k, "Interval")
+        self.key_interval_row = ctrl.row
         self._right_stack(ctrl, [
             self._entry(ctrl, self.vars["key_val_int"], 6),
             self._unit(ctrl, self.vars["key_unit"])])
 
-        adv_k = self._disclosure(k, "Advanced", self.vars["adv_key_open"])
+        self._sep(k)
+        adv_k = self._disclosure(k, "More options", self.vars["adv_key_open"])
+
+        ctrl = self._row(adv_k, "Mode", "sequence, combo or typed text")
+        self.key_mode_row = ctrl.row
+        self._seg(ctrl, self.vars["key_mode"], ["Key", "Sequence", "Combo", "Text"],
+                  command=self._refresh_key_ui).pack(side="right")
+
+        ctrl = self._row(adv_k, "Value")
+        self.keyval_row = ctrl.row
+        self.keyval_entry = self._entry(ctrl, self.vars["key_value"], 24)
+        self.keyval_entry.pack(side="right")
+        self.keyval_hint = tk.Label(adv_k, text="", font=(UI_FONT, 8), anchor="w")
+        self._reg(self.keyval_hint, "faint")
+
         ctrl = self._row(adv_k, "Randomize interval", "keeps the rhythm human")
         self._right_stack(ctrl, [
             self._pm(ctrl),
@@ -955,48 +962,50 @@ class AutoClickerApp:
         page = tk.Frame(self.container); self._reg(page, "bg")
         body = self._make_scrollable(page)
 
-        a = self._card(body, "Activation")
-        ctrl = self._row(a, "Mode", "hold = runs only while the key is held")
+        # Basic: the one hotkey everybody needs. The rest is opt-in.
+        h = self._card(body, "Hotkey")
+        self.hk_master = self._hotkey_row(h, "Start / stop", "master")
+
+        self._sep(h)
+        adv_h = self._disclosure(h, "More hotkeys", self.vars["adv_hotkeys_open"])
+        self.hk_panic = self._hotkey_row(adv_h, "Panic stop", "panic")
+        ctrl = self._row(adv_h, "Separate keys", "control mouse and keyboard apart")
+        self._toggle(ctrl, self.vars["separate_hotkeys"], self._sync_flags).pack(side="right")
+        self.hk_mouse = self._hotkey_row(adv_h, "Mouse only", "mouse_hk")
+        self.hk_key = self._hotkey_row(adv_h, "Key only", "key_hk")
+
+        b = self._card(body, "Behaviour")
+        ctrl = self._row(b, "Activation", "hold = runs only while the key is held")
         self._seg(ctrl, self.vars["activation"], ["Toggle", "Hold"],
                   command=self._sync_flags).pack(side="right")
 
-        h = self._card(body, "Hotkeys")
-        self.hk_master = self._hotkey_row(h, "Start / stop", "master")
-        self.hk_panic = self._hotkey_row(h, "Panic stop", "panic")
-        self._sep(h)
-        ctrl = self._row(h, "Separate keys", "control mouse and keyboard apart")
-        self._toggle(ctrl, self.vars["separate_hotkeys"], self._sync_flags).pack(side="right")
-        self.hk_mouse = self._hotkey_row(h, "Mouse only", "mouse_hk")
-        self.hk_key = self._hotkey_row(h, "Key only", "key_hk")
+        self._sep(b)
+        adv_b = self._disclosure(b, "More options", self.vars["adv_behav_open"])
 
-        s = self._card(body, "Limits")
-        ctrl = self._row(s, "Stop after")
+        ctrl = self._row(adv_b, "Stop after")
         self._seg(ctrl, self.vars["stop_mode"], ["Never", "Count", "Time"],
                   command=self._refresh_limit_ui).pack(side="right")
-        ctrl = self._row(s, "Value")
+        ctrl = self._row(adv_b, "Value")
         self.limit_row = ctrl.row
         self.limit_unit = tk.Label(ctrl, text="", font=(UI_FONT, 9))
         self.limit_unit.pack(side="right", padx=(6, 0)); self._reg(self.limit_unit, "muted")
         self.limit_entry_c = self._entry(ctrl, self.vars["stop_count"], 7)
         self.limit_entry_t = self._entry(ctrl, self.vars["stop_time"], 7)
 
-        ctrl = self._row(s, "Countdown", "delay before it starts")
+        ctrl = self._row(adv_b, "Countdown", "delay before it starts")
         self._right_stack(ctrl, [
             self._entry(ctrl, self.vars["countdown"], 5),
             self._unit_label(ctrl, "s")])
 
-        w = self._card(body, "Window")
-        ctrl = self._row(w, "Always on top")
+        ctrl = self._row(adv_b, "Always on top")
         self._toggle(ctrl, self.vars["always_top"], self._apply_always_top).pack(side="right")
 
-        p = self._card(body, "Profiles")
-        ctrl = self._row(p, "Saved setups", "your last setup is remembered automatically")
+        ctrl = self._row(adv_b, "Profiles", "your last setup is remembered automatically")
         self._right_stack(ctrl, [
             self._icon_pill(ctrl, "Save", self._save_profile),
             self._icon_pill(ctrl, "Load", self._load_profile)])
 
-        st = self._card(body, "Stats")
-        ctrl = self._row(st, "All-time actions")
+        ctrl = self._row(adv_b, "All-time actions")
         self.stat_lbl = tk.Label(ctrl, text="0", font=(UI_FONT, 12, "bold"))
         self._reg(self.stat_lbl, "title")
         self._right_stack(ctrl, [
@@ -1075,9 +1084,10 @@ class AutoClickerApp:
         self.key_row.pack_forget()
         self.keyval_row.pack_forget()
         self.keyval_hint.pack_forget()
-        # pack right below Mode, not at the end of the card
+        # `before`/`after` only work between siblings, and these two rows live in
+        # different containers: the key chip is basic, the value field is advanced.
         if mode == "Key":
-            self.key_row.pack(fill="x", pady=5, after=self.key_mode_row)
+            self.key_row.pack(fill="x", pady=5, before=self.key_interval_row)
         else:
             self.keyval_row.pack(fill="x", pady=5, after=self.key_mode_row)
             self.keyval_hint.configure(text=hints.get(mode, ""))
