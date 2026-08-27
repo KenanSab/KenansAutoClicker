@@ -2,7 +2,8 @@
 
 ![Kenan's AutoClicker](docs/banner.png)
 
-**An open-source input automation tool for accessibility, repetitive work, and software testing.**
+**KAC** — an open-source input automation tool for accessibility, repetitive
+work, and software testing.
 
 Set it up once. Save it as a preset. Share it with everyone else.
 
