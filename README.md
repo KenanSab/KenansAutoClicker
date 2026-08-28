@@ -8,7 +8,7 @@ work, and software testing.
 Set it up once. Save it as a preset. Share it with everyone else.
 
 [![Build](https://github.com/KenanSab/KenansAutoClicker/actions/workflows/build.yml/badge.svg)](https://github.com/KenanSab/KenansAutoClicker/actions)
-[![Tests](https://img.shields.io/badge/tests-143%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-145%20passing-brightgreen)](tests/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://python.org)
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgray)](#download)
@@ -52,11 +52,11 @@ else lives behind **More options** until you ask for it.
 <table>
 <tr>
 <td width="50%"><img src="docs/advanced.png" alt="Advanced options expanded"></td>
-<td width="50%"><img src="docs/settings.png" alt="Settings"></td>
+<td width="50%"><img src="docs/macro.png" alt="Macro recorder"></td>
 </tr>
 <tr>
-<td align="center"><em>Targeting and humanization, on demand.</em></td>
-<td align="center"><em>Settings follow the same rule.</em></td>
+<td align="center"><em>Targeting, humanization and a warning when saved points no longer match your screen.</em></td>
+<td align="center"><em>Record what you do, then replay it.</em></td>
 </tr>
 </table>
 
@@ -213,7 +213,7 @@ pip install pytest
 python -m pytest tests/ -q
 ```
 
-**143 tests** covering preset validation and hostile input, the input engine, key
+**145 tests** covering preset validation and hostile input, the input engine, key
 parsing, persistence, and interface behavior. CI runs them on every push, and
 nothing is built unless they pass.
 

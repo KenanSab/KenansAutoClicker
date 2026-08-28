@@ -138,3 +138,36 @@ def test_matching_geometry_produces_no_warning(app):
     app.points = [(5, 5)]
     app.points_geometry = list(current_geometry(app.root))
     assert app._point_warning() is None
+
+
+def test_warning_sits_directly_under_the_points(app):
+    """It once rendered at the bottom of the whole section, far from the rows
+    it is talking about."""
+    app.root.deiconify(); app.root.geometry("600x880")
+    app.show_page("home")
+    app.vars["adv_click_open"].set(True)
+    app.vars["target_mode"].set("Multi"); app._refresh_target_ui()
+    app.points = [(10, 10)]
+    app.points_geometry = [123, 456]           # force the warning
+    app._refresh_points()
+    app.root.update_idletasks(); app.root.update()
+
+    assert app.point_warn.winfo_ismapped(), "warning not shown for a stale screen"
+    gap = app.point_warn.winfo_rooty() - app.points_row.winfo_rooty()
+    assert 0 < gap < 90, f"warning sits {gap}px from the points row"
+
+    app.points = []; app.points_geometry = None
+    app.vars["adv_click_open"].set(False)
+    app.vars["target_mode"].set("Cursor"); app._refresh_target_ui()
+    app.root.withdraw()
+
+
+def test_dwell_settings_sit_under_the_action_row(app):
+    app.root.deiconify(); app.root.geometry("600x880")
+    app.show_page("home")
+    app.vars["click_action"].set("Dwell"); app._refresh_action_ui()
+    app.root.update_idletasks(); app.root.update()
+    gap = app.dwell_row.winfo_rooty() - app.click_action_row.winfo_rooty()
+    assert 0 < gap < 90, f"dwell settings sit {gap}px from Action"
+    app.vars["click_action"].set("Click"); app._refresh_action_ui()
+    app.root.withdraw()

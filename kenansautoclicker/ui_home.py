@@ -36,6 +36,7 @@ class HomePage:
         self._seg(ctrl, self.vars["mouse_button"], ["Left", "Right", "Middle"]).pack(side="right")
 
         ctrl = self._row(c, "Action", "hold keeps it down, dwell clicks where you rest")
+        self.click_action_row = ctrl.row
         self._seg(ctrl, self.vars["click_action"], ["Click", "Hold", "Dwell"],
                   command=self._refresh_action_ui).pack(side="right")
 
@@ -197,9 +198,10 @@ class HomePage:
         self._right_stack(ctrl, [self.macro_lbl, self.macro_rec_btn])
 
         self.macro_hint = tk.Label(mc, font=(UI_FONT, 8), anchor="w", justify="left",
-                                   text="Recording starts after a countdown and stops "
-                                        "on the record hotkey, so the click that starts "
-                                        "it is not part of the macro.")
+                                   wraplength=520,
+                                   text="Recording starts after a countdown and stops on "
+                                        "the start/stop hotkey, so the click that begins "
+                                        "it never ends up inside the macro.")
         self.macro_hint.pack(anchor="w"); self._reg(self.macro_hint, "faint")
 
         ctrl = self._row(mc, "Repeat", "0 means until you stop it")
@@ -235,12 +237,17 @@ class HomePage:
         warning = self._point_warning()
         self.point_warn.pack_forget()
         self.point_fix_btn.pack_forget()
-        if warning and self.vars["target_mode"].get() in ("Fixed", "Multi"):
+        mode = self.vars["target_mode"].get()
+        if warning and mode in ("Fixed", "Multi"):
             message, can_rescale = warning
             self.point_warn_lbl.configure(text=message)
             if can_rescale:
                 self.point_fix_btn.pack(side="right", padx=(0, 10))
-            self.point_warn.pack(fill="x", pady=(2, 6))
+            anchor = self.pos_row if mode == "Fixed" else self.points_row
+            if anchor.winfo_manager():          # only anchor to a packed row
+                self.point_warn.pack(fill="x", pady=(2, 6), after=anchor)
+            else:
+                self.point_warn.pack(fill="x", pady=(2, 6))
 
     def _refresh_target_ui(self):
         """Show the position controls that match the chosen target, in place."""
@@ -265,7 +272,7 @@ class HomePage:
                                          before=self.click_button_row)
             self._refresh_speed_hint()
         elif action == "Dwell":
-            self.dwell_row.pack(fill="x", pady=5)
+            self.dwell_row.pack(fill="x", pady=5, after=self.click_action_row)
 
     def _refresh_speed_hint(self):
         """Warn when the interval is faster than most software will register.

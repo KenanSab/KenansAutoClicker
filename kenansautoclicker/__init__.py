@@ -7,7 +7,7 @@ Copyright (c) 2026 Kenan. MIT Licensed.
 https://github.com/KenanSab/KenansAutoClicker
 """
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 __author__ = "Kenan"
 __license__ = "MIT"
 __url__ = "https://github.com/KenanSab/KenansAutoClicker"
