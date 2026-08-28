@@ -25,14 +25,27 @@ class HomePage:
         self._right_stack(ctrl, [
             self._entry(ctrl, self.vars["click_val"], 6),
             self._unit(ctrl, self.vars["click_unit"])])
+        self.speed_hint = tk.Label(c, text="", font=(UI_FONT, 8), anchor="w",
+                                   justify="left")
+        self.speed_hint.pack(anchor="w"); self._reg(self.speed_hint, "warn_text")
+        for name in ("click_val", "click_unit"):
+            self.vars[name].trace_add("write", lambda *_: self._refresh_speed_hint())
 
         ctrl = self._row(c, "Button")
         self.click_button_row = ctrl.row
         self._seg(ctrl, self.vars["mouse_button"], ["Left", "Right", "Middle"]).pack(side="right")
 
-        ctrl = self._row(c, "Action", "hold keeps the button down")
-        self._seg(ctrl, self.vars["click_action"], ["Click", "Hold"],
+        ctrl = self._row(c, "Action", "hold keeps it down, dwell clicks where you rest")
+        self._seg(ctrl, self.vars["click_action"], ["Click", "Hold", "Dwell"],
                   command=self._refresh_action_ui).pack(side="right")
+
+        ctrl = self._row(c, "Rest for", "how long before a dwell click fires")
+        self.dwell_row = ctrl.row
+        self._right_stack(ctrl, [
+            self._entry(ctrl, self.vars["dwell_secs"], 5),
+            self._unit_label(ctrl, "sec, within"),
+            self._entry(ctrl, self.vars["dwell_px"], 4),
+            self._unit_label(ctrl, "px")])
 
         # ---- everything below is collapsed by default ----
         self._sep(c)
@@ -65,6 +78,16 @@ class HomePage:
             self._icon_pill(ctrl, "Add point", self._pick_point),
             self.points_lbl,
             self._icon_pill(ctrl, "Clear", self._clear_points)])
+
+        # saved coordinates silently break when the display changes, so say so
+        self.point_warn = tk.Frame(adv, highlightthickness=1, bd=0)
+        self._reg(self.point_warn, "warn_box")
+        self.point_warn_lbl = tk.Label(self.point_warn, text="", font=(UI_FONT, 8),
+                                       justify="left", anchor="w", wraplength=380)
+        self.point_warn_lbl.pack(side="left", padx=10, pady=8)
+        self._reg(self.point_warn_lbl, "warn_text")
+        self.point_fix_btn = self._icon_pill(self.point_warn, "Rescale",
+                                             self._rescale_points)
 
         self._sub(adv, "Humanize")
 
@@ -164,11 +187,61 @@ class HomePage:
             self._entry(ctrl, self.vars["scroll_rand"], 5),
             self._unit_label(ctrl, "ms")])
 
+        # ============ MACRO ============
+        mc = self._card(body, "Macro", self.vars["macro_enabled"])
+
+        ctrl = self._row(mc, "Recording")
+        self.macro_lbl = tk.Label(ctrl, text="nothing recorded yet", font=(UI_FONT, 9))
+        self._reg(self.macro_lbl, "muted")
+        self.macro_rec_btn = self._icon_pill(ctrl, "Record", self._toggle_recording)
+        self._right_stack(ctrl, [self.macro_lbl, self.macro_rec_btn])
+
+        self.macro_hint = tk.Label(mc, font=(UI_FONT, 8), anchor="w", justify="left",
+                                   text="Recording starts after a countdown and stops "
+                                        "on the record hotkey, so the click that starts "
+                                        "it is not part of the macro.")
+        self.macro_hint.pack(anchor="w"); self._reg(self.macro_hint, "faint")
+
+        ctrl = self._row(mc, "Repeat", "0 means until you stop it")
+        self._right_stack(ctrl, [
+            self._entry(ctrl, self.vars["macro_repeat"], 5),
+            self._unit_label(ctrl, "times")])
+
+        self._sep(mc)
+        adv_m = self._disclosure(mc, "More options", self.vars["adv_macro_open"])
+
+        ctrl = self._row(adv_m, "Speed", "2 plays it twice as fast")
+        self._right_stack(ctrl, [
+            self._entry(ctrl, self.vars["macro_speed"], 5),
+            self._unit_label(ctrl, "x")])
+
+        ctrl = self._row(adv_m, "Record movement", "smoother, but larger files")
+        self._toggle(ctrl, self.vars["macro_moves"]).pack(side="right")
+
+        ctrl = self._row(adv_m, "Macro file")
+        self._right_stack(ctrl, [
+            self._icon_pill(ctrl, "Save", self._save_macro),
+            self._icon_pill(ctrl, "Load", self._load_macro)])
+
         spacer = tk.Frame(body, height=18); spacer.pack(); self._reg(spacer, "bg")
         return page
 
 
     # ---- conditional UI ------------------------------------------------- #
+    def _refresh_point_warning(self):
+        """Show or hide the display-change warning under the points."""
+        if not hasattr(self, "point_warn"):
+            return
+        warning = self._point_warning()
+        self.point_warn.pack_forget()
+        self.point_fix_btn.pack_forget()
+        if warning and self.vars["target_mode"].get() in ("Fixed", "Multi"):
+            message, can_rescale = warning
+            self.point_warn_lbl.configure(text=message)
+            if can_rescale:
+                self.point_fix_btn.pack(side="right", padx=(0, 10))
+            self.point_warn.pack(fill="x", pady=(2, 6))
+
     def _refresh_target_ui(self):
         """Show the position controls that match the chosen target, in place."""
         mode = self.vars["target_mode"].get()
@@ -181,12 +254,40 @@ class HomePage:
         self._refresh_points()
 
     def _refresh_action_ui(self):
-        """Holding is continuous, so an interval would mean nothing."""
-        if self.vars["click_action"].get() == "Hold":
-            self.click_interval_row.pack_forget()
-        else:
+        """Only Click uses an interval; only Dwell uses the rest settings."""
+        action = self.vars["click_action"].get()
+        self.click_interval_row.pack_forget()
+        self.dwell_row.pack_forget()
+        self.speed_hint.pack_forget()
+
+        if action == "Click":
             self.click_interval_row.pack(fill="x", pady=5,
                                          before=self.click_button_row)
+            self._refresh_speed_hint()
+        elif action == "Dwell":
+            self.dwell_row.pack(fill="x", pady=5)
+
+    def _refresh_speed_hint(self):
+        """Warn when the interval is faster than most software will register.
+
+        A common complaint about auto clickers is that nothing happens at very
+        high speeds, because the target application silently drops the extra
+        clicks. Saying so is friendlier than letting people conclude the app is
+        broken.
+        """
+        if not hasattr(self, "speed_hint"):
+            return
+        if self.vars["click_action"].get() != "Click":
+            self.speed_hint.pack_forget()
+            return
+        secs = self._interval_of("click_val", "click_unit")
+        if 0 < secs < 0.01:
+            self.speed_hint.configure(
+                text=f"About {1 / secs:.0f} clicks per second. Many apps and "
+                     "games ignore clicks this fast.")
+            self.speed_hint.pack(anchor="w", before=self.click_button_row)
+        else:
+            self.speed_hint.pack_forget()
 
     def _refresh_key_ui(self):
         """Rebuild the key rows for the chosen mode.

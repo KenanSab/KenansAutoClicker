@@ -8,7 +8,7 @@ work, and software testing.
 Set it up once. Save it as a preset. Share it with everyone else.
 
 [![Build](https://github.com/KenanSab/KenansAutoClicker/actions/workflows/build.yml/badge.svg)](https://github.com/KenanSab/KenansAutoClicker/actions)
-[![Tests](https://img.shields.io/badge/tests-98%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-143%20passing-brightgreen)](tests/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://python.org)
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgray)](#download)
@@ -156,8 +156,21 @@ Single-player, idle and AFK presets don't need the tag.
 
 **Auto clicker.** Left, right or middle button, single or double, intervals from
 milliseconds to minutes. Click at the cursor, at a fixed point, or cycle through
-a sequence of points you pick on screen. Switch **Action** to *Hold* and it keeps
-the button pressed instead of clicking, and always releases when you stop.
+a sequence of points you pick on screen. **Action** switches between *Click*,
+*Hold* (keeps the button down, always released on stop) and *Dwell*.
+
+**Macro recorder.** Record what you actually do, clicks, keys, scrolls and their
+timing, then replay it at any speed, any number of times. Saved as readable JSON
+you can edit or share. Anything it pressed is released when playback ends, even
+if the recording stopped mid-drag.
+
+**Real dwell clicking.** Clicks when the pointer genuinely stops moving, not on a
+timer. Moving re-arms the next click, so resting your hand does not fire a
+stream of clicks. Built for people who cannot press a mouse button.
+
+**Coordinates that survive a display change.** Saved points remember the screen
+they were captured on. Change resolution or unplug a monitor and the app says so
+and offers to rescale, instead of silently clicking into empty space.
 
 **Auto scroll.** Scroll up or down on a timer, with an adjustable number of
 notches per scroll. Useful for reading long pages hands-free.
@@ -200,7 +213,7 @@ pip install pytest
 python -m pytest tests/ -q
 ```
 
-**98 tests** covering preset validation and hostile input, the input engine, key
+**143 tests** covering preset validation and hostile input, the input engine, key
 parsing, persistence, and interface behavior. CI runs them on every push, and
 nothing is built unless they pass.
 
@@ -233,6 +246,8 @@ kenansautoclicker/
 ├── ui_settings.py   Settings page
 ├── widgets.py       switches, segmented pickers, disclosures, icon buttons
 ├── icons.py         Lucide icons + an SVG path renderer
+├── recorder.py      macro capture, playback and macro files
+├── screens.py       display-change detection for saved coordinates
 ├── keys.py          key naming, serialization, sequence/combo parsing
 ├── storage.py       config and profile persistence
 └── theme.py         color palettes

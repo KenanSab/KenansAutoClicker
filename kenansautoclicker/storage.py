@@ -20,6 +20,7 @@ class Storage:
     def _collect(self):
         data = {n: v.get() for n, v in self.vars.items() if n != "status"}
         data["_points"] = self.points
+        data["_points_geometry"] = self.points_geometry
         data["_total_clicks"] = self.total_clicks
         data["_keys"] = {"spam": key_to_str(self.spam_key), "master": key_to_str(self.master_hotkey),
                          "panic": key_to_str(self.panic_hotkey), "mouse": key_to_str(self.mouse_hotkey),
@@ -35,6 +36,8 @@ class Storage:
                 except tk.TclError:
                     pass
         self.points = [tuple(p) for p in data.get("_points", [])]
+        geom = data.get("_points_geometry")
+        self.points_geometry = list(geom) if isinstance(geom, (list, tuple)) and len(geom) == 2 else None
         self.total_clicks = int(data.get("_total_clicks", 0))
         ks = data.get("_keys", {})
         if ks:

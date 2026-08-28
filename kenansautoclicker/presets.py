@@ -22,7 +22,7 @@ COMMUNITY_INDEX_URL = ("https://raw.githubusercontent.com/KenanSab/"
 #: can't steal your F6 or quietly turn on always-on-top.
 PRESET_ALLOWED_KEYS = {
     "mouse_enabled", "click_val", "click_unit", "click_rand",
-    "mouse_button", "click_type", "click_action",
+    "mouse_button", "click_type", "click_action", "dwell_secs", "dwell_px",
     "target_mode", "fixed_x", "fixed_y",
     "smooth_move", "jitter_on", "jitter_px",
     "hold_rand_on", "hold_min", "hold_max",
@@ -59,11 +59,13 @@ BUILTIN_PRESETS = [
         "name": "Dwell Click",
         "category": "Accessibility",
         "author": "Kenan's AutoClicker",
-        "description": "Clicks every 2 seconds wherever the pointer is resting, "
-                       "so you can click by hovering instead of pressing.",
+        "description": "Clicks wherever you rest the pointer for a second, so "
+                       "you can click by hovering instead of pressing. Move the "
+                       "pointer to arm the next click.",
         "tags": ["accessibility", "assistive", "dwell"],
         "settings": {
-            "mouse_enabled": True, "click_val": "2", "click_unit": "sec",
+            "mouse_enabled": True, "click_action": "Dwell",
+            "dwell_secs": "1.0", "dwell_px": "8",
             "mouse_button": "Left", "click_type": "Single",
             "target_mode": "Cursor", "key_enabled": False, "stop_mode": "Never",
         },

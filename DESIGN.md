@@ -229,18 +229,36 @@ single file the import happened to already be there, so nothing ever failed.
 
 ---
 
+## Coordinates that outlive the display they were picked on
+
+Searching for what people complain about in auto clickers turns up one failure
+over and over: saved coordinates that start clicking in the wrong place after
+the display setup changes. A different resolution, an unplugged monitor, a
+docked laptop. Nothing warns you, because a coordinate is a pair of numbers and
+every pair of numbers looks valid.
+
+The app had this bug too. Points are now stored with the screen geometry they
+were captured on, so a mismatch can be noticed and said out loud, with an offer
+to rescale them proportionally.
+
+Points that sit outside the primary screen are treated differently. On a
+multi-monitor desktop those are perfectly legitimate, so that case informs
+rather than warns, and offers no "fix" for something that is not broken. Telling
+someone their working setup is wrong is its own kind of bug.
+
+---
+
 ## What I'd do next
-
-**A macro recorder.** Record real clicks and keystrokes with their timing and
-play them back. It's the natural finish to presets: instead of configuring a
-setup by hand, do the task once and save what you did.
-
-**Dwell clicking that detects rest.** The dwell preset currently runs on a timer.
-Proper assistive dwell clicking fires when the pointer has genuinely stopped
-moving, which is more useful and considerably harder to get right.
 
 **Per-application profiles.** Switch presets automatically depending on which
 window has focus.
+
+**An on-screen overlay** showing exactly where saved points will click, so you
+can check them without running anything.
+
+**Editing a recorded macro** in the app: trim the ends, delete a stray click,
+adjust one gap. Right now the file is readable JSON, which is a workable answer
+but not a friendly one.
 
 ---
 

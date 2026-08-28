@@ -37,6 +37,8 @@ class Engine:
             button={"Left": Button.left, "Right": Button.right,
                     "Middle": Button.middle}[self.vars["mouse_button"].get()],
             action=self.vars["click_action"].get(),
+            dwell_secs=max(self._num(self.vars["dwell_secs"], 1.0), 0.1),
+            dwell_px=max(self._num(self.vars["dwell_px"], 8), 1),
             count=2 if self.vars["click_type"].get() == "Double" else 1,
             base=self._interval_of("click_val", "click_unit"),
             rand=self._num(self.vars["click_rand"]) / 1000.0,
@@ -185,6 +187,41 @@ class Engine:
             if self._reached_limit(cfg, done, start):
                 self._finished_from_thread(); break
             self._sleep(self._rand_interval(cfg), lambda: self.key_active)
+
+    def _dwell_loop(self, cfg):
+        """Click when the pointer has genuinely stopped moving.
+
+        This is what assistive dwell clicking means, and it is not the same as
+        clicking on a timer: the click has to follow the user settling on a
+        target. Two rules make it usable rather than maddening.
+
+        Movement resets the timer, so drifting across the screen never fires a
+        click. And after a click the loop disarms until the pointer moves again,
+        so resting your hand does not produce a stream of clicks on one spot.
+        """
+        last = self.mouse_ctl.position
+        still_since = time.time()
+        armed = True
+        start = time.time()
+        done = 0
+        while self.mouse_active:
+            pos = self.mouse_ctl.position
+            if math.hypot(pos[0] - last[0], pos[1] - last[1]) > cfg["dwell_px"]:
+                last = pos
+                still_since = time.time()
+                armed = True                     # moving re-arms the next click
+            elif armed and (time.time() - still_since) >= cfg["dwell_secs"]:
+                try:
+                    self.mouse_ctl.click(cfg["button"], cfg["count"])
+                except Exception:
+                    pass
+                armed = False                    # wait for movement before again
+                done += 1
+                self.run_clicks += 1
+                self.total_clicks += 1
+                if self._reached_limit(cfg, done, start):
+                    self._finished_from_thread(); break
+            time.sleep(0.02)
 
     def _hold_mouse(self, cfg):
         """Press the button and keep it down until stopped.

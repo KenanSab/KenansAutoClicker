@@ -15,16 +15,19 @@ from pynput.mouse import Controller as MouseController
 
 from .engine import Engine
 from .keys import key_to_label
+from .screens import current_geometry, describe, scale_points
 from .storage import Storage
 from .theme import APP_NAME, THEMES, UI_FONT
 from .ui_base import UIBase
 from .ui_home import HomePage
+from .ui_macro import MacroControls
 from .ui_presets import PresetsPage
 from .ui_settings import SettingsPage
 from .widgets import IconButton
 
 
-class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storage):
+class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage,
+                     MacroControls, Engine, Storage):
     def __init__(self, root: tk.Tk):
         self.root = root
         self.theme_name = "dark"
@@ -33,9 +36,14 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
         self.mouse_active = False
         self.key_active = False
         self.scroll_active = False
+        self.macro_active = False
+        self.recorder = None
+        self.macro_events = []
+        self.macro_countdown_id = None
         self.click_thread = None
         self.key_thread = None
         self.scroll_thread = None
+        self.macro_thread = None
 
         self.run_clicks = 0
         self.total_clicks = 0
@@ -55,6 +63,7 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
         self._master_down = self._mouse_hk_down = self._key_hk_down = False
 
         self.points = []
+        self.points_geometry = None   # screen size when they were captured
 
         self.mouse_ctl = MouseController()
         self.kbd_ctl = KeyboardController()
@@ -83,7 +92,8 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
         self._sv("click_val", "100"); self._sv("click_unit", "ms")
         self._sv("click_rand", "0")
         self._sv("mouse_button", "Left"); self._sv("click_type", "Single")
-        self._sv("click_action", "Click")        # Click repeatedly, or hold down
+        self._sv("click_action", "Click")   # Click, Hold, or Dwell
+        self._sv("dwell_secs", "1.0"); self._sv("dwell_px", "8")
         self._sv("target_mode", "Cursor")
         self._sv("fixed_x", "0"); self._sv("fixed_y", "0")
         self._bv("smooth_move", False)
@@ -104,6 +114,11 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
         self._sv("scroll_val", "200"); self._sv("scroll_unit", "ms")
         self._sv("scroll_amount", "3"); self._sv("scroll_rand", "0")
         self._bv("adv_scroll_open", False)
+        # macro
+        self._bv("macro_enabled", False)
+        self._sv("macro_repeat", "1"); self._sv("macro_speed", "1")
+        self._bv("macro_moves", False)
+        self._bv("adv_macro_open", False)
         # settings
         self._sv("activation", "Toggle")
         self._bv("separate_hotkeys", False)
@@ -235,6 +250,9 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
             self.root.after(0, self.stop_all); return
         if key == self.master_hotkey and not self._master_down:
             self._master_down = True
+            if self.recorder is not None and self.recorder.recording:
+                self.root.after(0, self._stop_recording)
+                return
             if self._hold_mode:
                 self.root.after(0, lambda: self.start_all(countdown=False))
             else:
@@ -295,18 +313,39 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
         else:
             self.vars["fixed_x"].set(str(x)); self.vars["fixed_y"].set(str(y))
             self.points = [(x, y)]
+        # remember the display these were picked on, so a later change is visible
+        self.points_geometry = list(current_geometry(self.root))
         self._refresh_points()
         self.status_text.set(f"Saved ({x}, {y})")
         self.root.after(1200, self._refresh_running_ui)
 
     def _clear_points(self):
-        self.points = []; self._refresh_points()
+        self.points = []
+        self.points_geometry = None
+        self._refresh_points()
+
+    def _point_warning(self):
+        """Message about saved points no longer matching the display, if any."""
+        return describe(self.points, self.points_geometry,
+                        current_geometry(self.root))
+
+    def _rescale_points(self):
+        """Scale saved points to the current screen and forget the old size."""
+        now = current_geometry(self.root)
+        self.points = scale_points(self.points, self.points_geometry, now)
+        if self.points and self.vars["target_mode"].get() == "Fixed":
+            self.vars["fixed_x"].set(str(self.points[0][0]))
+            self.vars["fixed_y"].set(str(self.points[0][1]))
+        self.points_geometry = list(now)
+        self._refresh_points()
 
     def _refresh_points(self):
         txt = "  ".join(f"({x},{y})" for x, y in self.points) or "none yet"
         if len(txt) > 46:
             txt = f"{len(self.points)} points saved"
         self.points_lbl.configure(text=txt)
+        if hasattr(self, "point_warn"):
+            self._refresh_point_warning()
 
     # ---- start / stop ----------------------------------------------------- #
     def master_toggle(self):
@@ -315,7 +354,8 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
     def start_all(self, countdown=True):
         want = (bool(self.vars["mouse_enabled"].get()),
                 bool(self.vars["key_enabled"].get()),
-                bool(self.vars["scroll_enabled"].get()))
+                bool(self.vars["scroll_enabled"].get()),
+                bool(self.vars["macro_enabled"].get()) and bool(self.macro_events))
         if not any(want):
             self.status_text.set("Turn on a feature first")
             self.root.after(1800, self._refresh_running_ui)
@@ -323,14 +363,14 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
         cd = int(self._num(self.vars["countdown"])) if countdown else 0
         self._countdown(cd, *want) if cd > 0 else self._begin(*want)
 
-    def _countdown(self, n, want_mouse, want_key, want_scroll=False):
+    def _countdown(self, n, want_mouse, want_key, want_scroll=False, want_macro=False):
         if n <= 0:
-            self._begin(want_mouse, want_key, want_scroll); return
+            self._begin(want_mouse, want_key, want_scroll, want_macro); return
         self.status_text.set(f"Starting in {n}…")
-        self.root.after(1000, lambda: self._countdown(n - 1, want_mouse,
-                                                      want_key, want_scroll))
+        self.root.after(1000, lambda: self._countdown(n - 1, want_mouse, want_key,
+                                                      want_scroll, want_macro))
 
-    def _begin(self, want_mouse, want_key, want_scroll=False):
+    def _begin(self, want_mouse, want_key, want_scroll=False, want_macro=False):
         self.run_clicks = 0
         self._cps_last_count = 0
         self._cps_last_time = time.time()
@@ -339,7 +379,8 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
             cfg = self._mouse_cfg()
             # holding is a different job to clicking: press once and wait,
             # rather than loop
-            target = self._hold_mouse if cfg["action"] == "Hold" else self._click_loop
+            target = {"Hold": self._hold_mouse,
+                      "Dwell": self._dwell_loop}.get(cfg["action"], self._click_loop)
             self.mouse_active = True
             self.click_thread = threading.Thread(target=target, args=(cfg,), daemon=True)
             self.click_thread.start()
@@ -357,6 +398,11 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
                                                   args=(self._scroll_cfg(),), daemon=True)
             self.scroll_thread.start()
 
+        if want_macro and not self.macro_active and self.macro_events:
+            self.macro_active = True
+            self.macro_thread = threading.Thread(target=self._macro_loop, daemon=True)
+            self.macro_thread.start()
+
         self._refresh_running_ui()
 
     def _toggle_one(self, which):
@@ -364,18 +410,19 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
             if self.mouse_active:
                 self.mouse_active = False
             elif self.vars["mouse_enabled"].get():
-                self._begin(True, False, False)
+                self._begin(True, False, False, False)
         else:
             if self.key_active:
                 self.key_active = False
             elif self.vars["key_enabled"].get():
-                self._begin(False, True, False)
+                self._begin(False, True, False, False)
         self._refresh_running_ui()
 
     def stop_all(self):
         self.mouse_active = False
         self.key_active = False
         self.scroll_active = False
+        self.macro_active = False
         self._refresh_running_ui()
 
     def _refresh_running_ui(self):
@@ -383,7 +430,8 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
         # trigger a theme pass, so this may run before there is a button
         if not hasattr(self, "action_btn"):
             return
-        running = self.mouse_active or self.key_active or self.scroll_active
+        running = (self.mouse_active or self.key_active
+                   or self.scroll_active or self.macro_active)
         self.action_btn.configure(text="Stop" if running else "Start",
                                   bg=self.C["danger"] if running else self.C["accent"])
         self.status_text.set("Running" if running else "Ready")
@@ -394,7 +442,8 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
             pass
 
     def _auto_finished(self):
-        if self.mouse_active or self.key_active or self.scroll_active:
+        if (self.mouse_active or self.key_active
+                or self.scroll_active or self.macro_active):
             self.stop_all()
             self.status_text.set("Finished")
             self.root.after(2000, self._refresh_running_ui)

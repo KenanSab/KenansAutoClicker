@@ -54,12 +54,21 @@ def app(_app):
 def _reset(instance):
     instance.stop_all()
     instance.scroll_active = False
+    instance.macro_active = False
+    instance.macro_events = []
+    if instance.recorder is not None:
+        try:
+            instance.recorder.stop()
+        except Exception:
+            pass
+        instance.recorder = None
     for name, value in instance._defaults.items():
         try:
             instance.vars[name].set(value)
         except tk.TclError:
             pass
     instance.points = []
+    instance.points_geometry = None
     instance.total_clicks = 0
     instance.run_clicks = 0
     instance.recording_target = None
