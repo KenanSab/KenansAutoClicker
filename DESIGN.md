@@ -53,7 +53,7 @@ so the design has to start there.
 
 Four rules, all enforced in code rather than by convention.
 
-**Allow-listed, not blocklisted.** `PRESET_ALLOWED_KEYS` lists the 28 settings a
+**Allow-listed, not blocklisted.** `PRESET_ALLOWED_KEYS` lists the 35 settings a
 preset is allowed to change. All of them are about how clicking and typing
 behave. Anything else gets dropped during validation.
 
