@@ -13,7 +13,7 @@ Set it up once. Save it as a preset. Share it with everyone else.
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://python.org)
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#download)
 
-[**Download**](#download) · [**Presets**](#presets) · [**Features**](#features) · [**Contributing**](CONTRIBUTING.md)
+[**Download**](#download) · [**Presets**](#presets) · [**Features**](#features) · [**Design notes**](DESIGN.md) · [**Contributing**](CONTRIBUTING.md)
 
 </div>
 
