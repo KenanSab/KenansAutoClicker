@@ -27,7 +27,7 @@ class SettingsPage:
         self.hk_mouse = self._hotkey_row(adv_h, "Mouse only", "mouse_hk")
         self.hk_key = self._hotkey_row(adv_h, "Key only", "key_hk")
 
-        b = self._card(body, "Behaviour")
+        b = self._card(body, "Behavior")
         ctrl = self._row(b, "Activation", "hold = runs only while the key is held")
         self._seg(ctrl, self.vars["activation"], ["Toggle", "Hold"],
                   command=self._sync_flags).pack(side="right")

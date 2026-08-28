@@ -2,7 +2,7 @@
 
 ![Kenan's AutoClicker](docs/banner.png)
 
-**KAC** — an open-source input automation tool for accessibility, repetitive
+**KAC** is an open-source input automation tool for accessibility, repetitive
 work, and software testing.
 
 Set it up once. Save it as a preset. Share it with everyone else.
@@ -11,7 +11,7 @@ Set it up once. Save it as a preset. Share it with everyone else.
 [![Tests](https://img.shields.io/badge/tests-85%20passing-brightgreen)](tests/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://python.org)
-[![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#download)
+[![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgray)](#download)
 
 [**Download**](#download) · [**Presets**](#presets) · [**Features**](#features) · [**Design notes**](DESIGN.md) · [**Contributing**](CONTRIBUTING.md)
 
@@ -23,7 +23,7 @@ Set it up once. Save it as a preset. Share it with everyone else.
 
 Repetitive input is a genuine accessibility barrier. People with RSI, tremors, or
 limited hand mobility struggle with interfaces that assume fast, repeated
-clicking. The same mechanism solves ordinary problems too — stepping through
+clicking. The same mechanism solves ordinary problems too: stepping through
 hundreds of data-entry rows, or stress-testing a button in QA.
 
 Most auto clickers are closed-source binaries of unclear provenance that ask you
@@ -55,7 +55,7 @@ else lives behind **More options** until you ask for it.
 <td width="50%"><img src="docs/settings.png" alt="Settings"></td>
 </tr>
 <tr>
-<td align="center"><em>Targeting and humanisation, on demand.</em></td>
+<td align="center"><em>Targeting and humanization, on demand.</em></td>
 <td align="center"><em>Settings follow the same rule.</em></td>
 </tr>
 </table>
@@ -64,7 +64,7 @@ else lives behind **More options** until you ask for it.
 
 ## Download
 
-Windows `.exe` and macOS builds are produced automatically by GitHub Actions —
+Windows `.exe` and macOS builds are produced automatically by GitHub Actions,
 and only after the test suite passes.
 
 **[→ Get the latest release](../../releases)**
@@ -89,7 +89,7 @@ No release yet? Open the **Actions** tab → newest run → **Artifacts**.
 
 The feature that makes this more than another auto clicker.
 
-A **preset** is a complete setup — interval, button, key, humanisation — packaged
+A **preset** is a complete setup (interval, button, key, humanization) packaged
 so someone else can use it in one click.
 
 <table>
@@ -129,7 +129,7 @@ This matters, because a preset can come from the internet.
 - **Never executed.** A preset is data, not code. Nothing in it is ever run.
 - **Offline by default.** The app makes no network request until you press
   *Browse community*. Not on startup, not ever otherwise.
-- **Previewed first.** You see the exact diff — old value → new value — and
+- **Previewed first.** You see the exact diff, old value to new value, and
   choose whether to apply it.
 
 There are [tests](tests/test_presets.py) asserting each of these, including one
@@ -154,21 +154,21 @@ Single-player, idle and AFK presets don't need the tag.
 
 ## Features
 
-**Auto clicker** — left / right / middle, single or double, intervals from
+**Auto clicker.** Left, right or middle button, single or double, intervals from
 milliseconds to minutes. Click at the cursor, at a fixed point, or cycle through
 a sequence of points you pick on screen.
 
-**Auto key presser** — a single key, a sequence (`q w e r`), a combo
+**Auto key presser.** A single key, a sequence (`q w e r`), a combo
 (`ctrl+shift+a`), or repeatedly typed text.
 
-**Humanisation** — jitter, randomised intervals, variable hold time, smooth
+**Humanization.** Jitter, randomized intervals, variable hold time, smooth
 eased movement, and burst mode, so the input isn't a dead metronome.
 
-**Control** — global **F6** start/stop and **F9** panic stop that work even when
+**Control.** Global **F6** start/stop and **F9** panic stop that work even when
 the window isn't focused, both rebindable. Toggle or hold-to-run. Auto-stop after
 a number of actions or seconds, with an optional countdown.
 
-**Quality of life** — live CPS counter, all-time stats, save/load profiles,
+**Quality of life.** Live CPS counter, all-time stats, save/load profiles,
 always-on-top, light and dark themes.
 
 ---
@@ -197,7 +197,7 @@ python -m pytest tests/ -q
 ```
 
 **85 tests** covering preset validation and hostile input, the input engine, key
-parsing, persistence, and interface behaviour. CI runs them on every push, and
+parsing, persistence, and interface behavior. CI runs them on every push, and
 nothing is built unless they pass.
 
 ## Shipping a change
@@ -209,19 +209,19 @@ nothing is built unless they pass.
 ```
 
 The script refuses to commit or push if the tests fail. Once pushed, GitHub
-builds both platforms and refreshes the rolling **latest** download on its own —
-tagging is only needed for a permanent versioned release.
+builds both platforms and refreshes the rolling **latest** download on its own.
+Tagging is only needed for a permanent versioned release.
 
 ---
 
 ## How it's built
 
-Python · tkinter · [pynput](https://pypi.org/project/pynput/) — one dependency.
+Python, tkinter and [pynput](https://pypi.org/project/pynput/). One dependency.
 
 ```
 kenansautoclicker/
 ├── app.py           window, state, hotkeys, start/stop wiring
-├── engine.py        timing, humanisation, the click/key loops
+├── engine.py        timing, humanization, the click/key loops
 ├── presets.py       preset model, validation, community fetching
 ├── ui_base.py       cards, rows, scrolling, theming
 ├── ui_home.py       Home page
@@ -229,14 +229,14 @@ kenansautoclicker/
 ├── ui_settings.py   Settings page
 ├── widgets.py       switches, segmented pickers, disclosures, icon buttons
 ├── icons.py         Lucide icons + an SVG path renderer
-├── keys.py          key naming, serialisation, sequence/combo parsing
+├── keys.py          key naming, serialization, sequence/combo parsing
 ├── storage.py       config and profile persistence
-└── theme.py         colour palettes
+└── theme.py         color palettes
 ```
 
 ### Two decisions worth explaining
 
-**Icons are drawn, not bundled.** There's no image library here — `icons.py`
+**Icons are drawn, not bundled.** There's no image library here. `icons.py`
 contains a small SVG path renderer (cubic-bézier and elliptical-arc flattening)
 that draws [Lucide](https://lucide.dev)'s real path data straight onto a canvas.
 The icons stay crisp at any size, follow the theme automatically, and the
@@ -245,7 +245,7 @@ dependency list stays at exactly one package.
 **Presets are validated, not trusted.** Community presets arrive as JSON from
 the internet, so `clean_preset()` treats every field as hostile: keys are
 allow-listed, strings are length-capped, and nothing is ever evaluated. The
-blast radius of a malicious preset is "your click interval changed".
+worst a malicious preset can do is change your click interval.
 
 ---
 
@@ -265,7 +265,7 @@ Created by **Kenan** — [github.com/KenanSab](https://github.com/KenanSab)
 
 Icons by [Lucide](https://lucide.dev) (ISC License).
 
-Licensed under the [MIT License](LICENSE) — free to use, modify, and share,
+Licensed under the [MIT License](LICENSE): free to use, modify, and share,
 including commercially, as long as the copyright notice is kept.
 
 <div align="center">

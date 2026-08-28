@@ -2,7 +2,7 @@
 
 Icons are Lucide (https://lucide.dev), ISC License, Copyright (c) Lucide
 Contributors. Rendering the paths onto a canvas keeps them crisp at any size
-and lets them take the theme colour, without depending on an image library.
+and lets them take the theme color, without depending on an image library.
 """
 
 import math
@@ -77,7 +77,7 @@ def _cubic(p0, p1, p2, p3, steps=14):
 
 
 def _arc(x1, y1, rx, ry, phi_deg, large, sweep, x2, y2, steps=18):
-    """SVG elliptical arc -> points (endpoint to centre parameterisation, F.6.5)."""
+    """SVG elliptical arc -> points (endpoint to center parameterisation, F.6.5)."""
     if rx == 0 or ry == 0 or (x1 == x2 and y1 == y2):
         return [(x2, y2)]
     phi = math.radians(phi_deg)

@@ -17,7 +17,7 @@ class HomePage:
 
         # ============ CLICKER ============
         # Only the two things every autoclicker needs are visible; everything
-        # else — click type, targeting, coordinates, humanisation — is opt-in.
+        # else — click type, targeting, coordinates, humanization — is opt-in.
         c = self._card(body, "Auto Clicker", self.vars["mouse_enabled"])
 
         ctrl = self._row(c, "Interval")
@@ -97,7 +97,7 @@ class HomePage:
         # ============ KEY ============
         k = self._card(body, "Auto Key Presser", self.vars["key_enabled"])
 
-        # Basic: which key, and how fast. Modes and randomisation are opt-in.
+        # Basic: which key, and how fast. Modes and randomization are opt-in.
         ctrl = self._row(k, "Key")
         self.key_row = ctrl.row
         self.key_display = tk.Label(ctrl, text=key_to_label(self.spam_key),

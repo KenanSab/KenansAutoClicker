@@ -160,7 +160,7 @@ class PresetsPage:
     FRIENDLY = {
         "mouse_enabled": "Auto clicker", "key_enabled": "Auto key presser",
         "click_val": "Click interval", "click_unit": "Click interval unit",
-        "click_rand": "Click randomise (ms)", "mouse_button": "Mouse button",
+        "click_rand": "Click randomize (ms)", "mouse_button": "Mouse button",
         "click_type": "Click type", "target_mode": "Click at",
         "fixed_x": "Fixed X", "fixed_y": "Fixed Y", "smooth_move": "Move smoothly",
         "jitter_on": "Jitter", "jitter_px": "Jitter (px)",
@@ -169,7 +169,7 @@ class PresetsPage:
         "burst_n": "Burst size", "burst_pause": "Burst pause (s)",
         "key_mode": "Key mode", "key_value": "Key value",
         "key_val_int": "Key interval", "key_unit": "Key interval unit",
-        "key_rand": "Key randomise (ms)", "stop_mode": "Stop after",
+        "key_rand": "Key randomize (ms)", "stop_mode": "Stop after",
         "stop_count": "Stop count", "stop_time": "Stop time (s)",
         "countdown": "Countdown (s)",
     }

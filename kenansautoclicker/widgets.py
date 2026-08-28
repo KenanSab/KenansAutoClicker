@@ -55,7 +55,7 @@ class Toggle(tk.Canvas):
 #  Icons — Lucide (https://lucide.dev), ISC License, Copyright (c) Lucide
 #  Contributors. The strings below are Lucide's own 24x24 path data, drawn onto
 #  a tk.Canvas by the tiny renderer beneath them. Doing it this way keeps the
-#  icons crisp at any size, lets them take the theme colour, and avoids pulling
+#  icons crisp at any size, lets them take the theme color, and avoids pulling
 #  in an image library just to show six glyphs.
 # --------------------------------------------------------------------------- #
 

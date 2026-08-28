@@ -1,4 +1,4 @@
-"""Key naming, serialisation and the parsers for sequences and combos."""
+"""Key naming, serialization and the parsers for sequences and combos."""
 
 from pynput.keyboard import Key, KeyCode
 

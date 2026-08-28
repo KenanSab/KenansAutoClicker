@@ -1,4 +1,4 @@
-"""Colour palettes and shared UI constants."""
+"""Color palettes and shared UI constants."""
 
 APP_NAME = "Kenan's AutoClicker"
 UI_FONT = "Segoe UI"          # falls back gracefully on macOS / Linux

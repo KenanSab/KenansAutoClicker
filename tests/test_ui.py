@@ -1,4 +1,4 @@
-"""Interface behaviour: what is visible by default, where rows sit, scrolling.
+"""Interface behavior: what is visible by default, where rows sit, scrolling.
 
 Several of these pin bugs that actually shipped, so the comments say which.
 """

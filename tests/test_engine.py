@@ -1,4 +1,4 @@
-"""Engine behaviour: interval maths, limits, humanisation and persistence."""
+"""Engine behavior: interval maths, limits, humanization and persistence."""
 
 import time
 
@@ -19,18 +19,18 @@ def test_garbage_interval_does_not_crash(app):
     app._mouse_cfg()          # must still build a usable config
 
 
-def test_randomised_interval_never_zero_or_negative(app):
+def test_randomized_interval_never_zero_or_negative(app):
     cfg = app._mouse_cfg()
     cfg["rand"] = 0.05
     for _ in range(500):
         assert app._rand_interval(cfg) >= 0.001
 
 
-def test_randomised_interval_varies(app):
+def test_randomized_interval_varies(app):
     cfg = app._mouse_cfg()
     cfg["base"], cfg["rand"] = 0.1, 0.05
     seen = {round(app._rand_interval(cfg), 6) for _ in range(50)}
-    assert len(seen) > 1, "randomisation produced identical values"
+    assert len(seen) > 1, "randomization produced identical values"
 
 
 # ------------------------------------------------------------------- limits --
@@ -50,7 +50,7 @@ def test_never_limit(app):
     assert not app._reached_limit(cfg, 10 ** 6, 0)
 
 
-# ------------------------------------------------------------- humanisation --
+# ------------------------------------------------------------- humanization --
 def test_hold_time_handles_reversed_range(app):
     cfg = app._mouse_cfg()
     cfg.update(hold_on=True, hold_min=0.04, hold_max=0.01)   # deliberately swapped

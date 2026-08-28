@@ -1,4 +1,4 @@
-"""Key naming, serialisation and the sequence/combo parsers."""
+"""Key naming, serialization and the sequence/combo parsers."""
 
 import pytest
 from pynput.keyboard import Key, KeyCode

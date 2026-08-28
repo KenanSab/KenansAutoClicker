@@ -1,6 +1,6 @@
-"""The input engine: timing, humanisation, and the click/key loops.
+"""The input engine: timing, humanization, and the click/key loops.
 
-Kept apart from the interface so the behaviour can be reasoned about — and
+Kept apart from the interface so the behavior can be reasoned about — and
 tested — without constructing a window.
 """
 

@@ -104,7 +104,7 @@ The code is split by responsibility:
 | Module | What lives there |
 |---|---|
 | `app.py` | Window, state, hotkeys, start/stop wiring |
-| `engine.py` | Timing, humanisation, the click/key loops |
+| `engine.py` | Timing, humanization, the click/key loops |
 | `presets.py` | Preset model, validation, community fetching |
 | `ui_base.py` | Cards, rows, scrolling, theming |
 | `ui_home.py` / `ui_settings.py` / `ui_presets.py` | Page content |
@@ -112,5 +112,5 @@ The code is split by responsibility:
 | `icons.py` | Lucide icons + the SVG path renderer |
 | `keys.py` / `storage.py` | Key parsing; saving and loading |
 
-Please add a test with behaviour changes. If you're fixing a bug, a test that
+Please add a test with behavior changes. If you're fixing a bug, a test that
 fails before your fix is the most useful thing you can include.
