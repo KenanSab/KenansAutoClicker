@@ -274,6 +274,7 @@ class PresetsPage:
                     pass
         self._sync_flags()
         self._refresh_target_ui(); self._refresh_key_ui(); self._refresh_limit_ui()
+        self._refresh_action_ui()
         self.status_text.set(f"Applied “{preset.get('name', 'preset')}”")
         self.root.after(2200, self._refresh_running_ui)
         self.show_page("home")

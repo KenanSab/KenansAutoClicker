@@ -48,6 +48,7 @@ class Storage:
         self._sync_flags(); self._apply_always_top()
         self._refresh_points(); self._refresh_key_labels()
         self._refresh_target_ui(); self._refresh_key_ui(); self._refresh_limit_ui()
+        self._refresh_action_ui()
         self.apply_theme()
 
     def _load_config(self):
@@ -59,6 +60,7 @@ class Storage:
                 pass
         self._sync_flags()
         self._refresh_target_ui(); self._refresh_key_ui(); self._refresh_limit_ui()
+        self._refresh_action_ui()
 
     def _save_config(self):
         try:

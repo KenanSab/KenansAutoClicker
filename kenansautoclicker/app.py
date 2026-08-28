@@ -32,8 +32,10 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
 
         self.mouse_active = False
         self.key_active = False
+        self.scroll_active = False
         self.click_thread = None
         self.key_thread = None
+        self.scroll_thread = None
 
         self.run_clicks = 0
         self.total_clicks = 0
@@ -81,6 +83,7 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
         self._sv("click_val", "100"); self._sv("click_unit", "ms")
         self._sv("click_rand", "0")
         self._sv("mouse_button", "Left"); self._sv("click_type", "Single")
+        self._sv("click_action", "Click")        # Click repeatedly, or hold down
         self._sv("target_mode", "Cursor")
         self._sv("fixed_x", "0"); self._sv("fixed_y", "0")
         self._bv("smooth_move", False)
@@ -95,6 +98,12 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
         self._sv("key_val_int", "100"); self._sv("key_unit", "ms")
         self._sv("key_rand", "0")
         self._bv("adv_key_open", False)
+        # scroll
+        self._bv("scroll_enabled", False)
+        self._sv("scroll_dir", "Down")
+        self._sv("scroll_val", "200"); self._sv("scroll_unit", "ms")
+        self._sv("scroll_amount", "3"); self._sv("scroll_rand", "0")
+        self._bv("adv_scroll_open", False)
         # settings
         self._sv("activation", "Toggle")
         self._bv("separate_hotkeys", False)
@@ -279,35 +288,50 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
         self.stop_all() if (self.mouse_active or self.key_active) else self.start_all()
 
     def start_all(self, countdown=True):
-        want_mouse = bool(self.vars["mouse_enabled"].get())
-        want_key = bool(self.vars["key_enabled"].get())
-        if not want_mouse and not want_key:
+        want = (bool(self.vars["mouse_enabled"].get()),
+                bool(self.vars["key_enabled"].get()),
+                bool(self.vars["scroll_enabled"].get()))
+        if not any(want):
             self.status_text.set("Turn on a feature first")
             self.root.after(1800, self._refresh_running_ui)
             return
         cd = int(self._num(self.vars["countdown"])) if countdown else 0
-        self._countdown(cd, want_mouse, want_key) if cd > 0 else self._begin(want_mouse, want_key)
+        self._countdown(cd, *want) if cd > 0 else self._begin(*want)
 
-    def _countdown(self, n, want_mouse, want_key):
+    def _countdown(self, n, want_mouse, want_key, want_scroll=False):
         if n <= 0:
-            self._begin(want_mouse, want_key); return
+            self._begin(want_mouse, want_key, want_scroll); return
         self.status_text.set(f"Starting in {n}…")
-        self.root.after(1000, lambda: self._countdown(n - 1, want_mouse, want_key))
+        self.root.after(1000, lambda: self._countdown(n - 1, want_mouse,
+                                                      want_key, want_scroll))
 
-    def _begin(self, want_mouse, want_key):
+    def _begin(self, want_mouse, want_key, want_scroll=False):
         self.run_clicks = 0
         self._cps_last_count = 0
         self._cps_last_time = time.time()
+
         if want_mouse and not self.mouse_active:
+            cfg = self._mouse_cfg()
+            # holding is a different job to clicking: press once and wait,
+            # rather than loop
+            target = self._hold_mouse if cfg["action"] == "Hold" else self._click_loop
             self.mouse_active = True
-            self.click_thread = threading.Thread(target=self._click_loop,
-                                                 args=(self._mouse_cfg(),), daemon=True)
+            self.click_thread = threading.Thread(target=target, args=(cfg,), daemon=True)
             self.click_thread.start()
+
         if want_key and not self.key_active:
+            cfg = self._key_cfg()
+            target = self._hold_key if cfg["mode"] == "Hold" else self._key_loop
             self.key_active = True
-            self.key_thread = threading.Thread(target=self._key_loop,
-                                               args=(self._key_cfg(),), daemon=True)
+            self.key_thread = threading.Thread(target=target, args=(cfg,), daemon=True)
             self.key_thread.start()
+
+        if want_scroll and not self.scroll_active:
+            self.scroll_active = True
+            self.scroll_thread = threading.Thread(target=self._scroll_loop,
+                                                  args=(self._scroll_cfg(),), daemon=True)
+            self.scroll_thread.start()
+
         self._refresh_running_ui()
 
     def _toggle_one(self, which):
@@ -315,17 +339,18 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
             if self.mouse_active:
                 self.mouse_active = False
             elif self.vars["mouse_enabled"].get():
-                self._begin(True, False)
+                self._begin(True, False, False)
         else:
             if self.key_active:
                 self.key_active = False
             elif self.vars["key_enabled"].get():
-                self._begin(False, True)
+                self._begin(False, True, False)
         self._refresh_running_ui()
 
     def stop_all(self):
         self.mouse_active = False
         self.key_active = False
+        self.scroll_active = False
         self._refresh_running_ui()
 
     def _refresh_running_ui(self):
@@ -333,7 +358,7 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
         # trigger a theme pass, so this may run before there is a button
         if not hasattr(self, "action_btn"):
             return
-        running = self.mouse_active or self.key_active
+        running = self.mouse_active or self.key_active or self.scroll_active
         self.action_btn.configure(text="Stop" if running else "Start",
                                   bg=self.C["danger"] if running else self.C["accent"])
         self.status_text.set("Running" if running else "Ready")
@@ -344,7 +369,7 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
             pass
 
     def _auto_finished(self):
-        if self.mouse_active or self.key_active:
+        if self.mouse_active or self.key_active or self.scroll_active:
             self.stop_all()
             self.status_text.set("Finished")
             self.root.after(2000, self._refresh_running_ui)

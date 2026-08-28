@@ -142,6 +142,7 @@ class UIBase:
     def _sep(self, parent):
         s = tk.Frame(parent, height=1); s.pack(fill="x", pady=9)
         self._reg(s, "border_fill")
+        return s
 
     def _sub(self, parent, text):
         l = tk.Label(parent, text=text.upper(), font=(UI_FONT, 8, "bold"), anchor="w")

@@ -162,6 +162,28 @@ nothing will catch.
 
 ---
 
+## Holding, and the failure I most wanted to avoid
+
+Holding a button down is a two-line feature and a genuinely dangerous one. If
+the app ever stops without releasing, the button stays physically pressed. The
+user is then dragging across their own desktop with no obvious cause and no
+clear way to stop it, because the app that did it is no longer running.
+
+So the release is not written at the end of the function. It sits in a `finally`
+block, which runs whether the loop exits normally, the thread is torn down, or
+something raises on the way. The press is tracked with a flag so a release is
+only attempted if a press actually happened, and the release itself is wrapped
+in its own `except` because failing to release loudly is no better than failing
+quietly.
+
+The same shape covers held keys.
+
+[`tests/test_hold_scroll.py`](tests/test_hold_scroll.py) checks that stopping
+releases the button, that holding presses exactly once rather than repeatedly,
+and that an exception raised mid-hold still ends with the button released.
+
+---
+
 ## Two smaller platform lessons
 
 **`Key.insert` doesn't exist on macOS.** I built the key-name table by listing

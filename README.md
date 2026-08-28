@@ -8,7 +8,7 @@ work, and software testing.
 Set it up once. Save it as a preset. Share it with everyone else.
 
 [![Build](https://github.com/KenanSab/KenansAutoClicker/actions/workflows/build.yml/badge.svg)](https://github.com/KenanSab/KenansAutoClicker/actions)
-[![Tests](https://img.shields.io/badge/tests-85%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-98%20passing-brightgreen)](tests/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://python.org)
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgray)](#download)
@@ -107,7 +107,7 @@ so someone else can use it in one click.
 
 | Category | Presets |
 |---|---|
-| **Accessibility** | Assisted Click · Dwell Click · Key Repeat Assist |
+| **Accessibility** | Assisted Click · Dwell Click · Key Repeat Assist · Hold to Aim · Slow Reading Scroll |
 | **Productivity** | Form Filler · Keep Screen Awake · Bulk Confirm |
 | **Testing** | UI Stress Test · Repeatable QA Run · Human-like Clicking |
 
@@ -156,9 +156,13 @@ Single-player, idle and AFK presets don't need the tag.
 
 **Auto clicker.** Left, right or middle button, single or double, intervals from
 milliseconds to minutes. Click at the cursor, at a fixed point, or cycle through
-a sequence of points you pick on screen.
+a sequence of points you pick on screen. Switch **Action** to *Hold* and it keeps
+the button pressed instead of clicking, and always releases when you stop.
 
-**Auto key presser.** A single key, a sequence (`q w e r`), a combo
+**Auto scroll.** Scroll up or down on a timer, with an adjustable number of
+notches per scroll. Useful for reading long pages hands-free.
+
+**Auto key presser.** A single key, a held key, a sequence (`q w e r`), a combo
 (`ctrl+shift+a`), or repeatedly typed text.
 
 **Humanization.** Jitter, randomized intervals, variable hold time, smooth
@@ -196,7 +200,7 @@ pip install pytest
 python -m pytest tests/ -q
 ```
 
-**85 tests** covering preset validation and hostile input, the input engine, key
+**98 tests** covering preset validation and hostile input, the input engine, key
 parsing, persistence, and interface behavior. CI runs them on every push, and
 nothing is built unless they pass.
 

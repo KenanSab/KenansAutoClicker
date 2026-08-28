@@ -22,11 +22,14 @@ COMMUNITY_INDEX_URL = ("https://raw.githubusercontent.com/KenanSab/"
 #: can't steal your F6 or quietly turn on always-on-top.
 PRESET_ALLOWED_KEYS = {
     "mouse_enabled", "click_val", "click_unit", "click_rand",
-    "mouse_button", "click_type", "target_mode", "fixed_x", "fixed_y",
+    "mouse_button", "click_type", "click_action",
+    "target_mode", "fixed_x", "fixed_y",
     "smooth_move", "jitter_on", "jitter_px",
     "hold_rand_on", "hold_min", "hold_max",
     "burst_on", "burst_n", "burst_pause",
     "key_enabled", "key_mode", "key_value", "key_val_int", "key_unit", "key_rand",
+    "scroll_enabled", "scroll_dir", "scroll_val", "scroll_unit",
+    "scroll_amount", "scroll_rand",
     "stop_mode", "stop_count", "stop_time", "countdown",
 }
 
@@ -115,6 +118,33 @@ BUILTIN_PRESETS = [
             "mouse_enabled": False, "key_enabled": True, "key_mode": "Sequence",
             "key_value": "enter", "key_val_int": "500", "key_unit": "ms",
             "stop_mode": "Count", "stop_count": "50",
+        },
+    },
+    {
+        "name": "Hold to Aim",
+        "category": "Accessibility",
+        "author": "Kenan's AutoClicker",
+        "description": "Holds the left mouse button down until you stop, so you "
+                       "don't have to keep it pressed yourself.",
+        "tags": ["accessibility", "assistive", "hold"],
+        "settings": {
+            "mouse_enabled": True, "click_action": "Hold",
+            "mouse_button": "Left", "target_mode": "Cursor",
+            "key_enabled": False, "scroll_enabled": False, "stop_mode": "Never",
+        },
+    },
+    {
+        "name": "Slow Reading Scroll",
+        "category": "Accessibility",
+        "author": "Kenan's AutoClicker",
+        "description": "Scrolls down a little every two seconds, for reading long "
+                       "pages without having to scroll by hand.",
+        "tags": ["accessibility", "reading", "scroll"],
+        "settings": {
+            "mouse_enabled": False, "key_enabled": False,
+            "scroll_enabled": True, "scroll_dir": "Down",
+            "scroll_val": "2", "scroll_unit": "sec", "scroll_amount": "2",
+            "stop_mode": "Never",
         },
     },
     # ---------------- Testing / dev ----------------

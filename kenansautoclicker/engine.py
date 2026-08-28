@@ -36,6 +36,7 @@ class Engine:
         return dict(
             button={"Left": Button.left, "Right": Button.right,
                     "Middle": Button.middle}[self.vars["mouse_button"].get()],
+            action=self.vars["click_action"].get(),
             count=2 if self.vars["click_type"].get() == "Double" else 1,
             base=self._interval_of("click_val", "click_unit"),
             rand=self._num(self.vars["click_rand"]) / 1000.0,
@@ -62,6 +63,15 @@ class Engine:
             hold_on=bool(self.vars["hold_rand_on"].get()),
             hold_min=self._num(self.vars["hold_min"]) / 1000.0,
             hold_max=self._num(self.vars["hold_max"]) / 1000.0,
+            **self._stop_cfg())
+
+    def _scroll_cfg(self):
+        step = max(int(self._num(self.vars["scroll_amount"], 1)), 1)
+        return dict(
+            # pynput scrolls up for positive dy, so "Down" is negative
+            dy=step if self.vars["scroll_dir"].get() == "Up" else -step,
+            base=self._interval_of("scroll_val", "scroll_unit"),
+            rand=self._num(self.vars["scroll_rand"]) / 1000.0,
             **self._stop_cfg())
 
     def _stop_cfg(self):
@@ -98,6 +108,19 @@ class Engine:
         iv = cfg["base"] + (random.uniform(-cfg["rand"], cfg["rand"]) if cfg["rand"] else 0)
         return max(iv, 0.001)
 
+    def _finished_from_thread(self):
+        """Ask the interface to wrap up, from a worker thread.
+
+        Tk is not thread-safe, so the loops hand back through `after`. If the
+        window is already closing there is no interpreter left to schedule on
+        and Tk raises, which would surface as an unhandled thread exception.
+        Nothing useful can be done at that point, so it is swallowed.
+        """
+        try:
+            self.root.after(0, self._auto_finished)
+        except (RuntimeError, tk.TclError):
+            pass
+
     def _reached_limit(self, cfg, done, start):
         if cfg["stop_mode"] == "Count" and done >= cfg["stop_count"]:
             return True
@@ -128,7 +151,7 @@ class Engine:
                     time.sleep(0.03)
             done += 1; self.run_clicks += 1; self.total_clicks += 1
             if self._reached_limit(cfg, done, start):
-                self.root.after(0, self._auto_finished); break
+                self._finished_from_thread(); break
             if cfg["burst_on"]:
                 burst += 1
                 if burst >= cfg["burst_n"]:
@@ -160,8 +183,65 @@ class Engine:
                 pass
             done += 1; self.run_clicks += 1; self.total_clicks += 1
             if self._reached_limit(cfg, done, start):
-                self.root.after(0, self._auto_finished); break
+                self._finished_from_thread(); break
             self._sleep(self._rand_interval(cfg), lambda: self.key_active)
+
+    def _hold_mouse(self, cfg):
+        """Press the button and keep it down until stopped.
+
+        The release sits in a `finally` so it happens even if the thread is
+        torn down or something raises. A button left physically pressed is the
+        worst failure this app could have: it would keep dragging across the
+        user's desktop with no obvious way to stop it.
+        """
+        pressed = False
+        try:
+            self.mouse_ctl.press(cfg["button"])
+            pressed = True
+            self.run_clicks += 1
+            self.total_clicks += 1
+            while self.mouse_active:
+                time.sleep(0.02)
+        finally:
+            if pressed:
+                try:
+                    self.mouse_ctl.release(cfg["button"])
+                except Exception:
+                    pass
+
+    def _hold_key(self, cfg):
+        """Hold one key down until stopped. Released in a `finally`, as above."""
+        key = cfg["single"]
+        pressed = False
+        try:
+            self.kbd_ctl.press(key)
+            pressed = True
+            self.run_clicks += 1
+            self.total_clicks += 1
+            while self.key_active:
+                time.sleep(0.02)
+        finally:
+            if pressed:
+                try:
+                    self.kbd_ctl.release(key)
+                except Exception:
+                    pass
+
+    def _scroll_loop(self, cfg):
+        start = time.time()
+        done = 0
+        while self.scroll_active:
+            try:
+                self.mouse_ctl.scroll(0, cfg["dy"])
+            except Exception:
+                pass
+            done += 1
+            self.run_clicks += 1
+            self.total_clicks += 1
+            if self._reached_limit(cfg, done, start):
+                self._finished_from_thread()
+                break
+            self._sleep(self._rand_interval(cfg), lambda: self.scroll_active)
 
     def _tap(self, key, cfg):
         self.kbd_ctl.press(key); time.sleep(self._hold_time(cfg)); self.kbd_ctl.release(key)

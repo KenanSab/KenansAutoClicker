@@ -21,12 +21,18 @@ class HomePage:
         c = self._card(body, "Auto Clicker", self.vars["mouse_enabled"])
 
         ctrl = self._row(c, "Interval")
+        self.click_interval_row = ctrl.row
         self._right_stack(ctrl, [
             self._entry(ctrl, self.vars["click_val"], 6),
             self._unit(ctrl, self.vars["click_unit"])])
 
         ctrl = self._row(c, "Button")
+        self.click_button_row = ctrl.row
         self._seg(ctrl, self.vars["mouse_button"], ["Left", "Right", "Middle"]).pack(side="right")
+
+        ctrl = self._row(c, "Action", "hold keeps the button down")
+        self._seg(ctrl, self.vars["click_action"], ["Click", "Hold"],
+                  command=self._refresh_action_ui).pack(side="right")
 
         # ---- everything below is collapsed by default ----
         self._sep(c)
@@ -113,12 +119,12 @@ class HomePage:
             self._entry(ctrl, self.vars["key_val_int"], 6),
             self._unit(ctrl, self.vars["key_unit"])])
 
-        self._sep(k)
+        self.key_sep = self._sep(k)
         adv_k = self._disclosure(k, "More options", self.vars["adv_key_open"])
 
         ctrl = self._row(adv_k, "Mode", "sequence, combo or typed text")
         self.key_mode_row = ctrl.row
-        self._seg(ctrl, self.vars["key_mode"], ["Key", "Sequence", "Combo", "Text"],
+        self._seg(ctrl, self.vars["key_mode"], ["Key", "Hold", "Sequence", "Combo", "Text"],
                   command=self._refresh_key_ui).pack(side="right")
 
         ctrl = self._row(adv_k, "Value")
@@ -132,6 +138,30 @@ class HomePage:
         self._right_stack(ctrl, [
             self._pm(ctrl),
             self._entry(ctrl, self.vars["key_rand"], 5),
+            self._unit_label(ctrl, "ms")])
+
+        # ============ SCROLL ============
+        sc = self._card(body, "Auto Scroll", self.vars["scroll_enabled"])
+
+        ctrl = self._row(sc, "Direction")
+        self._seg(ctrl, self.vars["scroll_dir"], ["Up", "Down"]).pack(side="right")
+
+        ctrl = self._row(sc, "Interval")
+        self._right_stack(ctrl, [
+            self._entry(ctrl, self.vars["scroll_val"], 6),
+            self._unit(ctrl, self.vars["scroll_unit"])])
+
+        self._sep(sc)
+        adv_s = self._disclosure(sc, "More options", self.vars["adv_scroll_open"])
+
+        ctrl = self._row(adv_s, "Amount", "notches per scroll")
+        self._right_stack(ctrl, [
+            self._entry(ctrl, self.vars["scroll_amount"], 4)])
+
+        ctrl = self._row(adv_s, "Randomize interval", "keeps the rhythm human")
+        self._right_stack(ctrl, [
+            self._pm(ctrl),
+            self._entry(ctrl, self.vars["scroll_rand"], 5),
             self._unit_label(ctrl, "ms")])
 
         spacer = tk.Frame(body, height=18); spacer.pack(); self._reg(spacer, "bg")
@@ -150,19 +180,42 @@ class HomePage:
             self.points_row.pack(fill="x", pady=5, after=self.target_row)
         self._refresh_points()
 
-    def _refresh_key_ui(self):
-        mode = self.vars["key_mode"].get()
-        hints = {"Sequence": "space or comma separated  —  e.g.  q w e r",
-                 "Combo": "join with +  —  e.g.  ctrl+shift+a",
-                 "Text": "any words, typed out each time"}
-        self.key_row.pack_forget()
-        self.keyval_row.pack_forget()
-        self.keyval_hint.pack_forget()
-        # `before`/`after` only work between siblings, and these two rows live in
-        # different containers: the key chip is basic, the value field is advanced.
-        if mode == "Key":
-            self.key_row.pack(fill="x", pady=5, before=self.key_interval_row)
+    def _refresh_action_ui(self):
+        """Holding is continuous, so an interval would mean nothing."""
+        if self.vars["click_action"].get() == "Hold":
+            self.click_interval_row.pack_forget()
         else:
+            self.click_interval_row.pack(fill="x", pady=5,
+                                         before=self.click_button_row)
+
+    def _refresh_key_ui(self):
+        """Rebuild the key rows for the chosen mode.
+
+        The rows live in two different containers: the key chip and interval are
+        basic controls on the card, while the value field sits in the advanced
+        section. `before=`/`after=` only work between siblings, so each row is
+        anchored against something in its own parent that is always packed.
+        """
+        mode = self.vars["key_mode"].get()
+        hints = {"Sequence": "space or comma separated, e.g.  q w e r",
+                 "Combo": "join with +, e.g.  ctrl+shift+a",
+                 "Text": "any words, typed out each time"}
+        holding = mode == "Hold"
+        needs_value = mode not in ("Key", "Hold")
+
+        for row in (self.key_row, self.keyval_row, self.key_interval_row):
+            row.pack_forget()
+        self.keyval_hint.pack_forget()
+
+        # --- on the card, anchored to its divider ---
+        if not needs_value:
+            self.key_row.pack(fill="x", pady=5, before=self.key_sep)
+        # holding a key down is continuous, so an interval means nothing
+        if not holding:
+            self.key_interval_row.pack(fill="x", pady=5, before=self.key_sep)
+
+        # --- in the advanced section, anchored to the mode row ---
+        if needs_value:
             self.keyval_row.pack(fill="x", pady=5, after=self.key_mode_row)
             self.keyval_hint.configure(text=hints.get(mode, ""))
             self.keyval_hint.pack(anchor="w", after=self.keyval_row)

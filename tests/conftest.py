@@ -53,6 +53,7 @@ def app(_app):
 
 def _reset(instance):
     instance.stop_all()
+    instance.scroll_active = False
     for name, value in instance._defaults.items():
         try:
             instance.vars[name].set(value)
@@ -68,6 +69,7 @@ def _reset(instance):
     instance._refresh_target_ui()
     instance._refresh_key_ui()
     instance._refresh_limit_ui()
+    instance._refresh_action_ui()
     instance.show_page("home")
     if instance.theme_name != "dark":
         instance.toggle_theme()
