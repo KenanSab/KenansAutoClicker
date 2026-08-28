@@ -17,6 +17,8 @@ Set it up once. Save it as a preset. Share it with everyone else.
 
 </div>
 
+<img src="docs/demo.gif" width="620" alt="A tour of the app: click, hold and dwell modes, the advanced options, auto scroll, a recorded macro, and previewing a preset">
+
 ---
 
 ## Why this exists
@@ -203,7 +205,16 @@ python KenansAutoClicker.py
 
 ```bash
 pip install pyinstaller
-pyinstaller --onefile --windowed --name "KenansAutoClicker" KenansAutoClicker.py
+# Windows
+pyinstaller --onefile --windowed --icon docs/icon.ico --name "KenansAutoClicker" KenansAutoClicker.py
+# macOS
+pyinstaller --onefile --windowed --icon docs/icon.icns --name "KenansAutoClicker" KenansAutoClicker.py
+```
+
+The icon itself is generated, not hand-drawn in an editor:
+
+```bash
+python3 tools/make_icon.py   # writes docs/icon.png, .icns and .ico
 ```
 
 ## Tests

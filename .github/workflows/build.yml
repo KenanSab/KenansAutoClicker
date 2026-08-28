@@ -57,7 +57,7 @@ jobs:
         run: pip install pynput pyinstaller
 
       - name: Build EXE
-        run: pyinstaller --onefile --windowed --name "KenansAutoClicker" KenansAutoClicker.py
+        run: pyinstaller --onefile --windowed --icon docs/icon.ico --name "KenansAutoClicker" KenansAutoClicker.py
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
@@ -82,7 +82,7 @@ jobs:
         run: pip install pynput pyinstaller
 
       - name: Build app
-        run: pyinstaller --onefile --windowed --name "KenansAutoClicker" KenansAutoClicker.py
+        run: pyinstaller --onefile --windowed --icon docs/icon.icns --name "KenansAutoClicker" KenansAutoClicker.py
 
       - name: Zip the .app
         run: |
