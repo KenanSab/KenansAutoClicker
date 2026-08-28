@@ -121,7 +121,8 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
     # ---- window shell ---------------------------------------------------- #
     def _build_ui(self):
         self.root.title(APP_NAME)
-        # sized for the collapsed default view; expanding a section scrolls
+        # a starting size only; _fit_window sizes to the real content once the
+        # pages exist, so every card is reachable without scrolling for them
         self.root.geometry("600x580")
         self.root.minsize(540, 420)
         self._init_vars()
@@ -173,6 +174,7 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
         }
         self._bind_wheel()
         self.show_page("home")
+        self.root.after_idle(self._fit_window)
 
         # ---------- footer ----------
         self.footdiv = tk.Frame(self.root, height=1); self.footdiv.pack(fill="x", side="bottom")
@@ -196,6 +198,29 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage, Engine, Storag
         self.action_btn.pack(side="right", padx=20)
         self.action_btn.bind("<Button-1>", lambda _e: self.master_toggle())
         self._reg(self.action_btn, "primary")
+
+    def _fit_window(self):
+        """Grow the window so the collapsed Home page fits without scrolling.
+
+        Adding the third card pushed Auto Scroll below the fold at the old fixed
+        height, where people simply did not find it. Measuring instead of
+        hard-coding means adding another card cannot silently hide it again.
+        """
+        try:
+            self.root.update_idletasks()
+            canvas = self.pages["home"].canvas
+            box = canvas.bbox("all")
+            if not box:
+                return
+            content = box[3] - box[1]
+            chrome = (self.topbar.winfo_height() + self.actionbar.winfo_height() + 6)
+            wanted = content + chrome
+            # never taller than most of the screen, so small displays still work
+            limit = int(self.root.winfo_screenheight() * 0.85)
+            height = max(420, min(wanted, limit))
+            self.root.geometry(f"{self.root.winfo_width()}x{height}")
+        except (tk.TclError, KeyError, AttributeError):
+            pass
 
     # ---- global listener, recording, point picking ----------------------- #
     def _start_global_listener(self):

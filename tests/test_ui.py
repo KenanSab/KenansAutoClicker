@@ -223,3 +223,48 @@ def test_all_pages_survive_theme_change(app):
         app.show_page(page)
         app.toggle_theme(); app.root.update()
         app.toggle_theme(); app.root.update()
+
+
+# ------------------------------------------------------------- window size --
+def test_scroll_card_exists_on_home(app):
+    """Auto Scroll is a top-level feature, not something buried in a section."""
+    app.root.deiconify()
+    app.show_page("home"); app.root.update_idletasks(); app.root.update()
+    labels = []
+
+    def walk(w):
+        for ch in w.winfo_children():
+            if isinstance(ch, tk.Label):
+                try:
+                    labels.append(ch.cget("text"))
+                except tk.TclError:
+                    pass
+            walk(ch)
+
+    walk(app.pages["home"])
+    assert "Auto Scroll" in labels, "the Auto Scroll card is missing from Home"
+    app.root.withdraw()
+
+
+def test_collapsed_home_fits_without_scrolling(app):
+    """Every card must be reachable at the default size.
+
+    Adding the third card once pushed Auto Scroll below the fold, where it was
+    effectively invisible. The window now measures its content, so this asserts
+    the measurement actually worked.
+    """
+    for name in ADV:
+        app.vars[name].set(False)
+    app.root.deiconify()
+    app.show_page("home")
+    app._fit_window()
+    app.root.update_idletasks(); app.root.update()
+
+    canvas = app.pages["home"].canvas
+    box = canvas.bbox("all")
+    overflow = (box[3] - box[1]) - canvas.winfo_height()
+    screen = app.root.winfo_screenheight()
+    # on a very short display the clamp wins, and that is correct behaviour
+    if app.root.winfo_height() < int(screen * 0.85) - 2:
+        assert overflow <= 2, f"home overflows by {overflow}px at the default size"
+    app.root.withdraw()
