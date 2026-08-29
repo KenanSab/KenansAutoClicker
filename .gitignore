@@ -8,6 +8,18 @@ build/
 dist/
 *.spec
 
+# Secrets — never commit these.
+# The note above about env/ is a *folder* for virtual environments; the rules
+# here are for the *files* that hold credentials. The Supabase service_role key
+# in particular bypasses every security policy in the database.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets.json
+service_role*
+
 # Virtual environments
 venv/
 .venv/
