@@ -131,6 +131,7 @@ class AutoClickerApp(UIBase, HomePage, SettingsPage, PresetsPage,
         # presets
         self._sv("preset_search", "")
         self._sv("preset_filter", "All")
+        self._sv("preset_sort", "Popular")
         self.status_text = self._sv("status", "Ready")
 
     # ---- window shell ---------------------------------------------------- #

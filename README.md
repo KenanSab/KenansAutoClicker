@@ -8,7 +8,7 @@ work, and software testing.
 Set it up once. Save it as a preset. Share it with everyone else.
 
 [![Build](https://github.com/KenanSab/KenansAutoClicker/actions/workflows/build.yml/badge.svg)](https://github.com/KenanSab/KenansAutoClicker/actions)
-[![Tests](https://img.shields.io/badge/tests-145%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-170%20passing-brightgreen)](tests/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://python.org)
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgray)](#download)
@@ -115,11 +115,21 @@ so someone else can use it in one click.
 
 ### From the community
 
-Press **Browse community** to load presets other people have contributed. Your
-username appears on your preset's card, so contributors get credit too.
+Press **Browse community** to load presets other people have contributed, sorted
+by how many people actually installed them. Your username appears on your
+preset's card, so contributors get credit too.
 
-**Share yours:** *Save current as preset* → open a pull request.
-See **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+The library is hosted rather than kept in this repository, because reviewing a
+pull request per preset does not scale past a few dozen. Presets are submitted
+from inside the app, land in a moderation queue, and appear once approved. The
+`presets/` folder here holds the small curated set that ships built in.
+
+Browsing works offline: the last library you loaded is cached, and the built-in
+presets never need a network at all.
+
+**Share yours:** *Save current as preset* → **Submit to library**, or open a pull
+request for the curated set. See **[CONTRIBUTING.md](CONTRIBUTING.md)** and
+**[supabase/README.md](supabase/README.md)**.
 
 ### Presets are safe by construction
 
@@ -224,7 +234,7 @@ pip install pytest
 python -m pytest tests/ -q
 ```
 
-**145 tests** covering preset validation and hostile input, the input engine, key
+**170 tests** covering preset validation and hostile input, the input engine, key
 parsing, persistence, and interface behavior. CI runs them on every push, and
 nothing is built unless they pass.
 
@@ -257,6 +267,7 @@ kenansautoclicker/
 ├── ui_settings.py   Settings page
 ├── widgets.py       switches, segmented pickers, disclosures, icon buttons
 ├── icons.py         Lucide icons + an SVG path renderer
+├── cloud.py         the hosted community library client
 ├── recorder.py      macro capture, playback and macro files
 ├── screens.py       display-change detection for saved coordinates
 ├── keys.py          key naming, serialization, sequence/combo parsing

@@ -9,6 +9,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
+from . import cloud
 from .presets import (BUILTIN_PRESETS, RISK_NOTE, clean_preset,
                       export_preset, fetch_community, load_local_presets,
                       save_local_preset)
@@ -38,6 +39,12 @@ class PresetsPage:
         self._seg(filt, self.vars["preset_filter"],
                   ["All", "Accessibility", "Productivity", "Testing", "Mine"],
                   command=self._render_presets).pack(side="left")
+
+        sortrow = tk.Frame(card); sortrow.pack(fill="x", pady=(8, 0))
+        self._reg(sortrow, "surface")
+        self._unit_label(sortrow, "Sort community by").pack(side="left", padx=(0, 8))
+        self._seg(sortrow, self.vars["preset_sort"], ["Popular", "Newest"],
+                  command=self._browse_community).pack(side="left")
 
         act = tk.Frame(card); act.pack(fill="x", pady=(12, 0))
         self._reg(act, "surface")
@@ -128,6 +135,9 @@ class PresetsPage:
         badge.pack(side="left", padx=(10, 0)); self._reg(badge, "chip")
 
         self._icon_pill(head, "Preview", lambda q=p: self._preview_preset(q)).pack(side="right")
+        if p.get("source") == "community" and p.get("id"):
+            self._icon_pill(head, "Report",
+                            lambda q=p: self._report_preset(q)).pack(side="right", padx=(0, 6))
 
         desc = tk.Label(outer, text=p.get("description", ""), font=(UI_FONT, 9),
                         anchor="w", justify="left", wraplength=470)
@@ -137,6 +147,10 @@ class PresetsPage:
         self._reg(meta, "surface")
         by = tk.Label(meta, text="by " + p.get("author", "unknown"), font=(UI_FONT, 8))
         by.pack(side="left"); self._reg(by, "faint")
+        installs = p.get("installs")
+        if isinstance(installs, int) and installs > 0:
+            n = tk.Label(meta, text=f"  ·  {installs:,} installs", font=(UI_FONT, 8))
+            n.pack(side="left"); self._reg(n, "faint")
         tags = p.get("tags", [])
         if tags:
             t = tk.Label(meta, text="  ·  " + "  ".join(tags), font=(UI_FONT, 8))
@@ -275,28 +289,79 @@ class PresetsPage:
         self._sync_flags()
         self._refresh_target_ui(); self._refresh_key_ui(); self._refresh_limit_ui()
         self._refresh_action_ui()
+
+        # count the install, in the background and without ever complaining:
+        # a broken counter must not spoil applying a preset
+        if preset.get("source") == "community" and preset.get("id"):
+            threading.Thread(target=cloud.record_install,
+                             args=(preset["id"],), daemon=True).start()
         self.status_text.set(f"Applied “{preset.get('name', 'preset')}”")
         self.root.after(2200, self._refresh_running_ui)
         self.show_page("home")
 
-    # ---- community / import / export -------------------------------------- #
-    def _browse_community(self):
-        self.preset_status.configure(text="Fetching community presets…")
+    def _report_preset(self, preset):
+        """Flag a community preset for the maintainer to look at."""
+        name = preset.get("name", "this preset")
+        if not messagebox.askyesno(
+                "Report preset",
+                f"Report \u201c{name}\u201d for review?\n\n"
+                "Use this for presets that are spam, misleading, or do something "
+                "other than what they describe. Enough reports hide it until it "
+                "has been checked."):
+            return
 
         def work():
-            items, err = fetch_community()
-            self.root.after(0, lambda: self._community_done(items, err))
+            ok, error = cloud.report_preset(preset.get("id", ""), reason="in-app report")
+            message = ("Reported. Thank you." if ok
+                       else f"Could not send the report ({error}).")
+            self.root.after(0, lambda: self.preset_status.configure(text=message))
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _community_done(self, items, err):
-        if err:
+    # ---- community / import / export -------------------------------------- #
+    def _browse_community(self):
+        """Load the community library, falling back rather than failing.
+
+        Order of preference: the live database, then whatever was cached last
+        time, then the older static index published on GitHub. The library is a
+        convenience, so none of these being available should ever stop someone
+        using the app.
+        """
+        self.preset_status.configure(text="Loading community presets…")
+        sort = "installs" if self.vars["preset_sort"].get() == "Popular" else "new"
+
+        def work():
+            if cloud.configured():
+                items, error = cloud.fetch_library(sort=sort)
+                if not error:
+                    self.root.after(0, lambda: self._community_done(items, None, "live"))
+                    return
+                cached, age = cloud.load_cache()
+                if cached:
+                    self.root.after(0, lambda: self._community_done(cached, error, "cache",
+                                                                    age=age))
+                    return
+            items, error = fetch_community()          # the static GitHub index
+            self.root.after(0, lambda: self._community_done(items, error, "static"))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _community_done(self, items, error, source, age=None):
+        if source == "cache":
+            hours = int((age or 0) // 3600)
+            when = "just now" if hours < 1 else f"about {hours}h ago"
             self.preset_status.configure(
-                text=f"Could not reach the library ({err}). Everything else still works.")
+                text=f"Offline. Showing {len(items)} presets saved {when}.")
+        elif error:
+            self.preset_status.configure(
+                text=f"Could not reach the library ({error}). "
+                     "Built-in presets still work.")
             return
+        else:
+            self.preset_status.configure(
+                text=f"Loaded {len(items)} community preset"
+                     f"{'s' if len(items) != 1 else ''}.")
         self.community_presets = items
-        self.preset_status.configure(
-            text=f"Loaded {len(items)} community preset{'s' if len(items) != 1 else ''}.")
         self._render_presets()
 
     def _export_current(self):
