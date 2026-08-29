@@ -25,8 +25,14 @@ from .presets import clean_preset
 # --------------------------------------------------------------------------- #
 #: Filled in once the Supabase project exists. Environment variables override,
 #: which is how the tests point at a fake server.
-SUPABASE_URL = os.environ.get("KAC_SUPABASE_URL", "")
-ANON_KEY = os.environ.get("KAC_SUPABASE_ANON_KEY", "")
+SUPABASE_URL = os.environ.get(
+    "KAC_SUPABASE_URL", "https://jllcyzwtzmqhhjfnxvvy.supabase.co")
+ANON_KEY = os.environ.get(
+    "KAC_SUPABASE_ANON_KEY",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpsbGN5end0em1xaGhqZm54dnZ5Iiwicm9sZSI6"
+    "ImFub24iLCJpYXQiOjE3ODc5NjU1OTYsImV4cCI6MjEwMzU0MTU5Nn0."
+    "ZSa8ydKAzBAMUnN2EvnVAG7ntfKgpqdh9wKT4IzU0T0")
 
 TIMEOUT = 8
 CACHE_PATH = os.path.join(os.path.expanduser("~"), ".kenans_autoclicker_library.json")
