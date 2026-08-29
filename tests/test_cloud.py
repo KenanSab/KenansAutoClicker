@@ -48,7 +48,7 @@ class FakeResponse:
 
 
 def patch_http(monkeypatch, result, capture=None):
-    def fake(request, timeout=0):
+    def fake(request, timeout=0, context=None):
         if capture is not None:
             capture.append(request)
         if isinstance(result, Exception):
@@ -248,3 +248,35 @@ def test_report_reason_is_truncated(configured, monkeypatch):
     patch_http(monkeypatch, None, capture=seen)
     cloud.report_preset("abc", "why " * 200)
     assert len(json.loads(seen[0].data)["reason"]) <= 200
+
+
+# ------------------------------------------------------------ certificates --
+def test_ssl_context_can_verify_something():
+    """Python from python.org ships an empty certificate store until someone
+    runs Install Certificates.command, which almost nobody does. The app has to
+    cope, or HTTPS fails for a large share of macOS users."""
+    context = cloud._ssl_context()
+    assert len(context.get_ca_certs()) > 0, "no certificate authorities loaded"
+
+
+def test_ssl_verification_is_never_disabled():
+    """An unverified connection would let anyone on the network swap the preset
+    library for their own. Unavailable is better than untrusted."""
+    import ssl
+    context = cloud._ssl_context()
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    assert context.check_hostname is True
+
+
+def test_certificate_failure_is_reported_distinctly(configured, monkeypatch):
+    """'no connection' would send someone hunting their wifi for a problem that
+    is actually a local certificate store."""
+    import ssl
+
+    def fake(request, timeout=0, context=None):
+        raise ssl.SSLCertVerificationError("unable to get local issuer certificate")
+
+    monkeypatch.setattr(cloud.urllib.request, "urlopen", fake)
+    presets, error = cloud.fetch_library()
+    assert presets == []
+    assert error == "certificate problem"

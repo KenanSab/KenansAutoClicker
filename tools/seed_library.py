@@ -18,6 +18,7 @@ import urllib.request
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 
+from kenansautoclicker.cloud import _ssl_context                      # noqa: E402
 from kenansautoclicker.presets import BUILTIN_PRESETS, clean_preset   # noqa: E402
 
 
@@ -62,7 +63,8 @@ def push(url, key, presets, dry_run=False):
                  "Content-Type": "application/json", "Prefer": "return=minimal"},
         method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:
+        with urllib.request.urlopen(request, timeout=20,
+                                    context=_ssl_context()) as response:
             print(f"inserted {len(rows)} presets (HTTP {response.status})")
             return True
     except urllib.error.HTTPError as exc:

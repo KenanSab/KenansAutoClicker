@@ -13,6 +13,7 @@ it cannot read back, and bump one counter. Nothing else.
 
 import json
 import os
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -39,6 +40,45 @@ CACHE_PATH = os.path.join(os.path.expanduser("~"), ".kenans_autoclicker_library.
 CACHE_MAX_AGE = 60 * 60 * 6          # re-fetch at most every six hours
 
 
+def _ssl_context():
+    """A verifying TLS context that also works on a stock macOS Python.
+
+    Python installed from python.org ships its own certificate store and leaves
+    it empty until someone runs "Install Certificates.command". Most people
+    never do, so HTTPS fails with a confusing certificate error that looks like
+    the server is broken. Rather than inflict that, fall back to certifi if it
+    is installed, then to the operating system's own bundle.
+
+    Verification is never disabled. An unverified connection would let anyone on
+    the network replace the preset library with content of their choosing, which
+    is a far worse outcome than the library being unavailable.
+    """
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        pass
+
+    context = ssl.create_default_context()
+    try:
+        if context.get_ca_certs():
+            return context
+    except Exception:
+        return context
+
+    # the bundled store is empty: borrow the system one
+    for path in ("/etc/ssl/cert.pem",                     # macOS
+                 "/etc/ssl/certs/ca-certificates.crt",    # Debian, Ubuntu
+                 "/etc/pki/tls/certs/ca-bundle.crt"):     # Fedora, RHEL
+        if os.path.exists(path):
+            try:
+                context.load_verify_locations(cafile=path)
+                break
+            except Exception:
+                continue
+    return context
+
+
 def configured():
     """Whether a backend has been set up. Everything degrades politely if not."""
     return bool(SUPABASE_URL and ANON_KEY)
@@ -61,7 +101,8 @@ def _request(path, method="GET", body=None, token=None, extra_headers=None):
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+        with urllib.request.urlopen(request, timeout=TIMEOUT,
+                                    context=_ssl_context()) as response:
             raw = response.read(2_000_000).decode("utf-8", "replace")
             return (json.loads(raw) if raw.strip() else None), None
     except urllib.error.HTTPError as exc:
@@ -73,7 +114,11 @@ def _request(path, method="GET", body=None, token=None, extra_headers=None):
         if exc.code in (401, 403):
             return None, "not allowed"
         return None, f"HTTP {exc.code}{(': ' + detail[:80]) if detail else ''}"
-    except urllib.error.URLError:
+    except ssl.SSLCertVerificationError:
+        return None, "certificate problem"
+    except urllib.error.URLError as exc:
+        if isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError):
+            return None, "certificate problem"
         return None, "no connection"
     except (OSError, ValueError):
         return None, "network error"
